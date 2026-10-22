@@ -4,6 +4,7 @@ use std::fs::File;
 use std::io::{self, Read, Seek, Write};
 use std::path::{Path, PathBuf};
 
+use anstyle::{Ansi256Color, AnsiColor, Style};
 use json_skimmer::{ContainerKind, ErrorKind, Event, ParseError, Parser, StringKind};
 
 /// Default maximum number of raw JSON bytes retained for one object key.
@@ -62,6 +63,14 @@ pub enum OutputMode {
     Confirmed(ConfirmedOutput),
 }
 
+/// Whether the formatter emits semantic ANSI styles.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum Styling {
+    #[default]
+    Plain,
+    Ansi,
+}
+
 /// Resource limits and overflow behavior for a formatter.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Config {
@@ -70,6 +79,7 @@ pub struct Config {
     pub key_overflow: KeyOverflowPolicy,
     pub invalid_candidate: InvalidCandidatePolicy,
     pub output_mode: OutputMode,
+    pub styling: Styling,
 }
 
 impl Default for Config {
@@ -79,6 +89,7 @@ impl Default for Config {
             key_overflow: KeyOverflowPolicy::Error,
             invalid_candidate: InvalidCandidatePolicy::Fail,
             output_mode: OutputMode::Live,
+            styling: Styling::Plain,
         }
     }
 }
@@ -140,6 +151,29 @@ enum ActiveString {
 enum ValueTarget {
     Emit(Component),
     Skip,
+}
+
+#[derive(Clone, Copy)]
+enum SemanticStyle {
+    Root,
+    Key,
+    Index,
+    String,
+    Number,
+    Boolean,
+    Null,
+}
+
+impl SemanticStyle {
+    const fn style(self) -> Style {
+        match self {
+            Self::Root | Self::Key => AnsiColor::Blue.on_default(),
+            Self::Index | Self::Number => Ansi256Color(208).on_default(),
+            Self::String => AnsiColor::Green.on_default(),
+            Self::Boolean => AnsiColor::Magenta.on_default(),
+            Self::Null => AnsiColor::Yellow.on_default(),
+        }
+    }
 }
 
 enum Output<W> {
@@ -364,13 +398,26 @@ impl<W: Write> Formatter<W> {
                 let emitted = self.begin_scalar()?;
                 if emitted {
                     self.output.write_all(b"\"")?;
+                    write_style_start(
+                        &mut self.output,
+                        self.config.styling,
+                        SemanticStyle::String,
+                    )?;
                 }
                 self.string = Some(ActiveString::Value { emitted });
             }
             Event::StringFragment { kind, bytes, .. } => self.string_fragment(kind, bytes)?,
             Event::StringEnd { kind, .. } => self.end_string(kind)?,
             Event::NumberStart { .. } => {
-                self.number = Some(self.begin_scalar()?);
+                let emitted = self.begin_scalar()?;
+                if emitted {
+                    write_style_start(
+                        &mut self.output,
+                        self.config.styling,
+                        SemanticStyle::Number,
+                    )?;
+                }
+                self.number = Some(emitted);
             }
             Event::NumberFragment { bytes, .. } => match self.number {
                 Some(true) => self.output.write_all(bytes)?,
@@ -378,14 +425,20 @@ impl<W: Write> Formatter<W> {
                 None => return Err(invalid_events()),
             },
             Event::NumberEnd { .. } => match self.number.take() {
-                Some(true) => self.output.write_all(b";\n")?,
+                Some(true) => {
+                    write_style_end(&mut self.output, self.config.styling, SemanticStyle::Number)?;
+                    self.output.write_all(b";\n")?;
+                }
                 Some(false) => {}
                 None => return Err(invalid_events()),
             },
             Event::Boolean { value, .. } => {
-                self.scalar(if value { b"true" } else { b"false" }, false)?;
+                self.scalar(
+                    if value { b"true" } else { b"false" },
+                    SemanticStyle::Boolean,
+                )?;
             }
-            Event::Null { .. } => self.scalar(b"null", false)?,
+            Event::Null { .. } => self.scalar(b"null", SemanticStyle::Null)?,
             Event::Invalid(error) => return self.invalid_candidate(error),
             Event::CandidateEnd { .. } => {
                 self.output.commit_candidate()?;
@@ -439,7 +492,13 @@ impl<W: Write> Formatter<W> {
     fn open(&mut self, kind: ContainerKind) -> io::Result<()> {
         let component = if self.stack.is_empty() {
             if !self.root_written {
-                self.output.write_all(b"json = ")?;
+                write_styled(
+                    &mut self.output,
+                    self.config.styling,
+                    SemanticStyle::Root,
+                    b"json",
+                )?;
+                self.output.write_all(b" = ")?;
                 self.write_container(kind)?;
                 self.output.write_all(b";\n")?;
                 self.root_written = true;
@@ -495,6 +554,7 @@ impl<W: Write> Formatter<W> {
                 frame.key = Some(PendingKey::Skip);
             }
             (StringKind::Value, Some(ActiveString::Value { emitted: true })) => {
+                write_style_end(&mut self.output, self.config.styling, SemanticStyle::String)?;
                 self.output.write_all(b"\";\n")?;
             }
             (StringKind::Value, Some(ActiveString::Value { emitted: false })) => {}
@@ -527,17 +587,11 @@ impl<W: Write> Formatter<W> {
         Ok(())
     }
 
-    fn scalar(&mut self, value: &[u8], quoted: bool) -> io::Result<()> {
+    fn scalar(&mut self, value: &[u8], style: SemanticStyle) -> io::Result<()> {
         if !self.begin_scalar()? {
             return Ok(());
         }
-        if quoted {
-            self.output.write_all(b"\"")?;
-        }
-        self.output.write_all(value)?;
-        if quoted {
-            self.output.write_all(b"\"")?;
-        }
+        write_styled(&mut self.output, self.config.styling, style, value)?;
         self.output.write_all(b";\n")
     }
 
@@ -574,16 +628,21 @@ impl<W: Write> Formatter<W> {
     }
 
     fn write_path(&mut self, tail: Option<&Component>) -> io::Result<()> {
-        self.output.write_all(b"json")?;
+        write_styled(
+            &mut self.output,
+            self.config.styling,
+            SemanticStyle::Root,
+            b"json",
+        )?;
         for component in self
             .stack
             .iter()
             .filter_map(|frame| frame.component.as_ref())
         {
-            write_component(&mut self.output, component)?;
+            write_component(&mut self.output, self.config.styling, component)?;
         }
         if let Some(component) = tail {
-            write_component(&mut self.output, component)?;
+            write_component(&mut self.output, self.config.styling, component)?;
         }
         Ok(())
     }
@@ -596,19 +655,62 @@ impl<W: Write> Formatter<W> {
     }
 }
 
-fn write_component(output: &mut impl Write, component: &Component) -> io::Result<()> {
+fn write_component(
+    output: &mut impl Write,
+    styling: Styling,
+    component: &Component,
+) -> io::Result<()> {
     match component {
-        Component::Index(index) => write!(output, "[{index}]"),
+        Component::Index(index) => {
+            output.write_all(b"[")?;
+            write_style_start(output, styling, SemanticStyle::Index)?;
+            write!(output, "{index}")?;
+            write_style_end(output, styling, SemanticStyle::Index)?;
+            output.write_all(b"]")
+        }
         Component::Key(key) if is_identifier(key) => {
             output.write_all(b".")?;
-            output.write_all(key)
+            write_styled(output, styling, SemanticStyle::Key, key)
         }
         Component::Key(key) => {
             output.write_all(b"[\"")?;
-            output.write_all(key)?;
+            write_styled(output, styling, SemanticStyle::Key, key)?;
             output.write_all(b"\"]")
         }
     }
+}
+
+fn write_styled(
+    output: &mut impl Write,
+    styling: Styling,
+    semantic: SemanticStyle,
+    bytes: &[u8],
+) -> io::Result<()> {
+    write_style_start(output, styling, semantic)?;
+    output.write_all(bytes)?;
+    write_style_end(output, styling, semantic)
+}
+
+fn write_style_start(
+    output: &mut impl Write,
+    styling: Styling,
+    semantic: SemanticStyle,
+) -> io::Result<()> {
+    if styling == Styling::Ansi {
+        write!(output, "{}", semantic.style())?;
+    }
+    Ok(())
+}
+
+fn write_style_end(
+    output: &mut impl Write,
+    styling: Styling,
+    semantic: SemanticStyle,
+) -> io::Result<()> {
+    if styling == Styling::Ansi {
+        write!(output, "{:#}", semantic.style())?;
+    }
+    Ok(())
 }
 
 fn is_identifier(key: &[u8]) -> bool {
@@ -756,6 +858,27 @@ mod tests {
             flon(br#"{"name":"flon","count":1,"ready":true,"missing":null}"#),
             "json = {};\njson.name = \"flon\";\njson.count = 1;\njson.ready = true;\njson.missing = null;\n"
         );
+    }
+
+    #[test]
+    fn ansi_styling_uses_semantic_palette_without_changing_content() {
+        let output = format_with_config(
+            br#"{"s":"text","n":1,"b":true,"z":null,"a":[2]}"#.as_slice(),
+            Vec::new(),
+            Config {
+                styling: Styling::Ansi,
+                ..Config::default()
+            },
+        )
+        .expect("format styled JSON");
+        let output = String::from_utf8(output).expect("UTF-8 styled FLON");
+
+        assert!(output.contains("\u{1b}[34mjson\u{1b}[0m"));
+        assert!(output.contains(".\u{1b}[34ms\u{1b}[0m = \"\u{1b}[32mtext\u{1b}[0m\""));
+        assert!(output.contains(".\u{1b}[34mn\u{1b}[0m = \u{1b}[38;5;208m1\u{1b}[0m"));
+        assert!(output.contains(".\u{1b}[34mb\u{1b}[0m = \u{1b}[35mtrue\u{1b}[0m"));
+        assert!(output.contains(".\u{1b}[34mz\u{1b}[0m = \u{1b}[33mnull\u{1b}[0m"));
+        assert!(output.contains("[\u{1b}[38;5;208m0\u{1b}[0m]"));
     }
 
     #[test]

@@ -58,6 +58,18 @@ Live output with invalid candidates treated as errors is the default. Use
 Explicit options override profile defaults. `--show-config` prints the resolved
 configuration without processing input.
 
+Color defaults to `auto`: interactive terminal output is styled while pipes
+and redirected files remain plain. Override it explicitly when needed:
+
+```bash
+../../scripts/with-rust cargo run -- --color=always example.json
+../../scripts/with-rust cargo run -- --color=never example.json
+```
+
+`--no-color` is an alias for `--color=never`. FLON also recognizes
+`FLON_COLOR`, `NO_COLOR`, `FORCE_COLOR`, `CLICOLOR`, `CLICOLOR_FORCE`, and
+`TERM=dumb` according to the precedence documented in `docs/color.md`.
+
 ## Project documents
 
 - [Design](docs/design.md) describes the streaming architecture and memory

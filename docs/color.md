@@ -5,6 +5,10 @@
 Color is a presentation concern of the FLON application and formatter options.
 It is not a `json-skimmer` concern.
 
+The initial semantic palette, CLI choice, terminal adaptation, and environment
+precedence described below are implemented. Theme selection and custom role
+colors remain future work.
+
 FLON will use both crates in the `anstyle` ecosystem:
 
 - `anstyle` defines reusable semantic styles and RGB colors.
@@ -41,7 +45,7 @@ The CLI should expose:
 --color=auto|always|never
 ```
 
-`--no-color` may be retained as an alias for `--color=never`.
+`--no-color` is an alias for `--color=never`.
 
 - `auto` enables styling only when the destination and terminal capabilities
   support it.
@@ -71,9 +75,10 @@ The intended precedence is:
 5. `CLICOLOR=0` or `TERM=dumb`.
 6. Destination and terminal capability detection.
 
-Conflicting variables at the same level must have deterministic, documented
-behavior. `anstream` can implement the resolved output choice, but FLON owns
-this precedence contract rather than assuming a dependency's implicit policy.
+Within the force-color level, `FORCE_COLOR` is checked before
+`CLICOLOR_FORCE`. Values that are empty or `0` do not force color. `anstream`
+adapts the resolved output choice, but FLON owns this precedence contract
+rather than assuming a dependency's implicit policy.
 
 ## Themes and customization
 

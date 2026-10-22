@@ -35,16 +35,19 @@
 
 ## Terminal presentation
 
-- [ ] Use `anstyle` for the semantic FLON palette
-- [ ] Use `anstream` for styled output and terminal adaptation
-- [ ] Support `--color=auto|always|never`
-- [ ] Honor `NO_COLOR` and document environment-variable precedence
-- [ ] Evaluate `FORCE_COLOR`, `CLICOLOR`, and `CLICOLOR_FORCE` compatibility
+- [x] Use `anstyle` for the semantic FLON palette
+- [x] Use `anstream` for styled output and terminal adaptation
+- [x] Support `--color=auto|always|never`
+- [x] Honor `NO_COLOR` and document environment-variable precedence
+- [x] Support `FORCE_COLOR`, `CLICOLOR`, and `CLICOLOR_FORCE` compatibility
 - [ ] Add light, dark, and custom FLON palette configuration
 
 ## Release readiness
 
 - [ ] Verify whether the `flon` package name is available on crates.io
+- [ ] Add README examples for library use, stdin, files, profiles, recovery,
+      confirmed output, and color before publishing
+- [ ] Show representative JSON input and plain FLON output in the README
 - [ ] Add licensing and complete package metadata
 - [ ] Establish a minimum supported Rust version
 - [ ] Add integration tests for the compiled CLI

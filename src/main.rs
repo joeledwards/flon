@@ -1,13 +1,15 @@
+use std::env;
 use std::ffi::OsStr;
 use std::fs::File;
-use std::io::{self, BufWriter, Read, Write};
+use std::io::{self, BufWriter, IsTerminal, Read, Write};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
+use anstream::{AutoStream, ColorChoice as StreamColorChoice};
 use clap::{Parser as ClapParser, ValueEnum};
 use flon::{
     Config, ConfirmedOutput, EventOutcome, Formatter, InvalidCandidatePolicy, KeyOverflowPolicy,
-    OutputMode, Recovery,
+    OutputMode, Recovery, Styling,
 };
 use json_skimmer::Parser;
 
@@ -55,6 +57,14 @@ struct Cli {
     #[arg(long, value_enum)]
     diagnostics: Option<Diagnostics>,
 
+    /// When to emit terminal colors.
+    #[arg(long, value_enum, conflicts_with = "no_color")]
+    color: Option<ColorChoice>,
+
+    /// Disable terminal colors (alias for --color=never).
+    #[arg(long, conflicts_with = "color")]
+    no_color: bool,
+
     /// Print the resolved configuration and exit.
     #[arg(long)]
     show_config: bool,
@@ -93,6 +103,24 @@ enum Diagnostics {
     Quiet,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+enum ColorChoice {
+    Auto,
+    Always,
+    Never,
+}
+
+impl ColorChoice {
+    fn stream_choice(self, is_terminal: bool) -> StreamColorChoice {
+        match self {
+            Self::Auto if is_terminal => StreamColorChoice::Always,
+            Self::Auto => StreamColorChoice::Never,
+            Self::Always => StreamColorChoice::AlwaysAnsi,
+            Self::Never => StreamColorChoice::Never,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum ConfirmedLimit {
     Bytes(u64),
@@ -103,6 +131,7 @@ enum ConfirmedLimit {
 struct EffectiveConfig {
     formatter: Config,
     diagnostics: Diagnostics,
+    color: ColorChoice,
 }
 
 fn main() -> ExitCode {
@@ -131,7 +160,9 @@ fn run(cli: Cli) -> io::Result<()> {
     };
 
     let stdout = io::stdout();
-    let output = BufWriter::new(stdout.lock());
+    let stream_choice = effective.color.stream_choice(stdout.is_terminal());
+    let output = AutoStream::new(stdout.lock(), stream_choice);
+    let output = BufWriter::new(output);
     let mut output = format_stream(&mut input, output, effective)?;
     output.flush()
 }
@@ -212,10 +243,55 @@ fn resolve(cli: &Cli) -> EffectiveConfig {
         diagnostics = selected;
     }
 
+    let color = resolve_color(cli);
+    formatter.styling = if color == ColorChoice::Never {
+        Styling::Plain
+    } else {
+        Styling::Ansi
+    };
+
     EffectiveConfig {
         formatter,
         diagnostics,
+        color,
     }
+}
+
+fn resolve_color(cli: &Cli) -> ColorChoice {
+    if cli.no_color {
+        return ColorChoice::Never;
+    }
+    if let Some(color) = cli.color {
+        return color;
+    }
+    if let Some(color) = env::var_os("FLON_COLOR").and_then(|value| parse_color_env(&value)) {
+        return color;
+    }
+    if env::var_os("NO_COLOR").is_some() {
+        return ColorChoice::Never;
+    }
+    if env_requests_color("FORCE_COLOR") || env_requests_color("CLICOLOR_FORCE") {
+        return ColorChoice::Always;
+    }
+    if env::var_os("CLICOLOR").is_some_and(|value| value == "0")
+        || env::var_os("TERM").is_some_and(|value| value.eq_ignore_ascii_case("dumb"))
+    {
+        return ColorChoice::Never;
+    }
+    ColorChoice::Auto
+}
+
+fn parse_color_env(value: &OsStr) -> Option<ColorChoice> {
+    match value.to_str()?.to_ascii_lowercase().as_str() {
+        "auto" => Some(ColorChoice::Auto),
+        "always" => Some(ColorChoice::Always),
+        "never" => Some(ColorChoice::Never),
+        _ => None,
+    }
+}
+
+fn env_requests_color(name: &str) -> bool {
+    env::var_os(name).is_some_and(|value| !value.is_empty() && value != "0")
 }
 
 fn format_stream<R: Read, W: Write>(
@@ -395,6 +471,31 @@ mod tests {
             effective.formatter.key_overflow,
             KeyOverflowPolicy::SkipValue
         );
+    }
+
+    #[test]
+    fn explicit_color_modes_control_formatter_styling() {
+        let colored = resolve(&cli(&["--color", "always"]));
+        assert_eq!(colored.color, ColorChoice::Always);
+        assert_eq!(colored.formatter.styling, Styling::Ansi);
+
+        let plain = resolve(&cli(&["--no-color"]));
+        assert_eq!(plain.color, ColorChoice::Never);
+        assert_eq!(plain.formatter.styling, Styling::Plain);
+    }
+
+    #[test]
+    fn parses_flon_color_environment_values() {
+        assert_eq!(parse_color_env(OsStr::new("auto")), Some(ColorChoice::Auto));
+        assert_eq!(
+            parse_color_env(OsStr::new("ALWAYS")),
+            Some(ColorChoice::Always)
+        );
+        assert_eq!(
+            parse_color_env(OsStr::new("never")),
+            Some(ColorChoice::Never)
+        );
+        assert_eq!(parse_color_env(OsStr::new("sometimes")), None);
     }
 
     #[test]
