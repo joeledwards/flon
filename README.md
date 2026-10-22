@@ -27,6 +27,37 @@ become dependencies of `json-skimmer`.
 See the [roadmap](ROADMAP.md) for current implementation status and planned CLI
 work.
 
+## Command-line use
+
+From this repository in the isolated workspace:
+
+```bash
+../../scripts/with-rust cargo run -- example.json
+../../scripts/with-rust cargo run < example.json
+```
+
+Live output with invalid candidates treated as errors is the default. Use
+`--help` for the complete configuration surface. Representative modes include:
+
+```bash
+# Quiet live recovery, similar to node-flon.
+../../scripts/with-rust cargo run -- --profile wraith example.json
+
+# Confirm each candidate, use unlimited file-backed overflow, annotate errors,
+# and report recoveries on stderr.
+../../scripts/with-rust cargo run -- --profile infinite example.json
+
+# Bounded confirmed output with explicit binary sizes.
+../../scripts/with-rust cargo run -- \
+  --output-mode confirmed \
+  --confirmed-memory 128MiB \
+  --confirmed-limit 10GiB \
+  example.json
+```
+
+Explicit options override profile defaults. `--show-config` prints the resolved
+configuration without processing input.
+
 ## Project documents
 
 - [Design](docs/design.md) describes the streaming architecture and memory

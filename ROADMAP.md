@@ -20,12 +20,14 @@
 
 - [x] Add stdin and file input
 - [ ] Add buffered and immediate output modes
-- [ ] Add CLI configuration and help
-- [ ] Add `--invalid=fail|skip|comment`
+- [x] Add CLI configuration and help
+- [x] Add `--invalid=fail|skip|comment`
+- [x] Expose key and confirmed-buffer limits through the CLI
+- [x] Report invalid-candidate recovery diagnostics on stderr
 - [ ] Add `--output=events` for parser events instead of FLON assignments
 - [ ] Add `--trace-events` for parser events and errors on stderr
-- [ ] Add `wraith` and `infinite` CLI configuration profiles
-- [ ] Add effective-configuration display for profiles and overrides
+- [x] Add `wraith` and `infinite` CLI configuration profiles
+- [x] Add effective-configuration display for profiles and overrides
 - [x] Treat a closed output pipe as successful early termination
 - [ ] Add elapsed-time summaries
 - [ ] Decide whether URL input belongs in the initial Rust release

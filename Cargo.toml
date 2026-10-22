@@ -8,5 +8,6 @@ keywords = ["json", "streaming", "flatten", "gron"]
 categories = ["command-line-utilities", "encoding"]
 
 [dependencies]
+clap = { version = "4.5", features = ["derive"] }
 json-skimmer = { version = "0.1.0", path = "../json-skimmer" }
 tempfile = "3.23"
