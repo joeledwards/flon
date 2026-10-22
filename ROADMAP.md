@@ -10,6 +10,7 @@
 - [x] Compile, format, and run the initial test suite
 - [ ] Add configurable active-key length limits
 - [ ] Define partial-output behavior for invalid speculative candidates
+- [ ] Define a line-delimited JSON parser-event diagnostic format
 - [ ] Port the complete `node-flon` fixture set
 - [ ] Add recovery, Unicode, escaping, precision, and chunk-boundary fixtures
 
@@ -18,6 +19,8 @@
 - [ ] Add stdin and file input
 - [ ] Add buffered and immediate output modes
 - [ ] Add CLI configuration and help
+- [ ] Add `--output=events` for parser events instead of FLON assignments
+- [ ] Add `--trace-events` for parser events and errors on stderr
 - [ ] Treat a closed output pipe as successful early termination
 - [ ] Add elapsed-time summaries
 - [ ] Decide whether URL input belongs in the initial Rust release

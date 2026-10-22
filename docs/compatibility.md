@@ -88,6 +88,11 @@ URL input and disabling TLS certificate validation require a deliberate safety
 and dependency decision. If insecure TLS is retained, it must be explicit,
 local to the selected request, and accompanied by a visible warning.
 
+The Rust CLI additionally provides parser-event diagnostics for debugging
+malformed and recovered streams. This is an intentional extension rather than
+a `node-flon` compatibility requirement. Event-only output may use stdout;
+event tracing alongside FLON assignments uses stderr.
+
 Exact short-option compatibility is desirable where it does not conflict with
 clear modern CLI conventions. Environment variable names may evolve, with
 documented compatibility aliases where valuable.

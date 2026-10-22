@@ -111,6 +111,26 @@ mode is appropriate when syntactically complete FLON output is more important
 than document-sized buffering. Recovery diagnostics must remain separate from
 stdout unless explicitly requested so they do not corrupt the data stream.
 
+## Parser-event diagnostics
+
+FLON will expose a diagnostic mode that renders `json-skimmer` events as
+line-delimited JSON. Records include the event type, absolute byte offset or
+span, container or string kind where applicable, safely encoded fragment
+bytes, structured parse errors, and candidate lifecycle events.
+
+The CLI provides two forms:
+
+- `--output=events` writes event records to stdout instead of FLON
+  assignments; and
+- `--trace-events` preserves normal FLON output on stdout and writes event
+  records to stderr.
+
+Diagnostic rendering is a FLON application concern built from the public
+`json-skimmer` event API. It must not make terminal presentation or process
+I/O part of the parser. The record format should be defined alongside invalid
+candidate and recovery policy so errors and recovery boundaries are visible
+without corrupting the assignment stream.
+
 ## I/O behavior
 
 The library writes to any `std::io::Write`. A convenience function may read
