@@ -7,7 +7,7 @@
 - [x] Streaming scalar strings and numbers without accumulating their contents
 - [x] Active object-key and array-index path tracking
 - [x] Initial compatibility fixtures based on `node-flon`
-- [ ] Compile, format, and run the initial test suite
+- [x] Compile, format, and run the initial test suite
 - [ ] Add configurable active-key length limits
 - [ ] Define partial-output behavior for invalid speculative candidates
 - [ ] Port the complete `node-flon` fixture set

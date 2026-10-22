@@ -56,21 +56,25 @@ impl<W: Write> Formatter<W> {
             Event::ArrayStart { .. } => self.open(ContainerKind::Array)?,
             Event::ObjectEnd { .. } => self.close(ContainerKind::Object)?,
             Event::ArrayEnd { .. } => self.close(ContainerKind::Array)?,
-            Event::StringStart { kind: StringKind::Key, .. } => {
+            Event::StringStart {
+                kind: StringKind::Key,
+                ..
+            } => {
                 self.string = Some(ActiveString::Key(Vec::new()));
             }
-            Event::StringStart { kind: StringKind::Value, .. } => {
+            Event::StringStart {
+                kind: StringKind::Value,
+                ..
+            } => {
                 self.begin_scalar()?;
                 self.output.write_all(b"\"")?;
                 self.string = Some(ActiveString::Value);
             }
-            Event::StringFragment { kind, bytes, .. } => {
-                match (kind, self.string.as_mut()) {
-                    (StringKind::Key, Some(ActiveString::Key(token))) => token.extend_from_slice(bytes),
-                    (StringKind::Value, Some(ActiveString::Value)) => self.output.write_all(bytes)?,
-                    _ => return Err(invalid_events()),
-                }
-            }
+            Event::StringFragment { kind, bytes, .. } => match (kind, self.string.as_mut()) {
+                (StringKind::Key, Some(ActiveString::Key(token))) => token.extend_from_slice(bytes),
+                (StringKind::Value, Some(ActiveString::Value)) => self.output.write_all(bytes)?,
+                _ => return Err(invalid_events()),
+            },
             Event::StringEnd { kind, .. } => self.end_string(kind)?,
             Event::NumberStart { .. } => {
                 self.begin_scalar()?;
@@ -79,7 +83,9 @@ impl<W: Write> Formatter<W> {
             Event::NumberFragment { bytes, .. } if self.number => self.output.write_all(bytes)?,
             Event::NumberFragment { .. } => return Err(invalid_events()),
             Event::NumberEnd { .. } => {
-                if !self.number { return Err(invalid_events()); }
+                if !self.number {
+                    return Err(invalid_events());
+                }
                 self.number = false;
                 self.output.write_all(b";\n")?;
             }
@@ -117,7 +123,12 @@ impl<W: Write> Formatter<W> {
             Some(component)
         };
 
-        self.stack.push(Frame { kind, component, key: None, next_index: 0 });
+        self.stack.push(Frame {
+            kind,
+            component,
+            key: None,
+            next_index: 0,
+        });
         Ok(())
     }
 
@@ -146,9 +157,13 @@ impl<W: Write> Formatter<W> {
 
     fn scalar(&mut self, value: &[u8], quoted: bool) -> io::Result<()> {
         self.begin_scalar()?;
-        if quoted { self.output.write_all(b"\"")?; }
+        if quoted {
+            self.output.write_all(b"\"")?;
+        }
         self.output.write_all(value)?;
-        if quoted { self.output.write_all(b"\"")?; }
+        if quoted {
+            self.output.write_all(b"\"")?;
+        }
         self.output.write_all(b";\n")
     }
 
@@ -161,7 +176,11 @@ impl<W: Write> Formatter<W> {
     fn take_component(&mut self) -> io::Result<Component> {
         let frame = self.stack.last_mut().ok_or_else(invalid_events)?;
         match frame.kind {
-            ContainerKind::Object => frame.key.take().map(Component::Key).ok_or_else(invalid_events),
+            ContainerKind::Object => frame
+                .key
+                .take()
+                .map(Component::Key)
+                .ok_or_else(invalid_events),
             ContainerKind::Array => {
                 let index = frame.next_index;
                 frame.next_index = frame.next_index.checked_add(1).ok_or_else(|| {
@@ -174,7 +193,11 @@ impl<W: Write> Formatter<W> {
 
     fn write_path(&mut self, tail: Option<&Component>) -> io::Result<()> {
         self.output.write_all(b"json")?;
-        for component in self.stack.iter().filter_map(|frame| frame.component.as_ref()) {
+        for component in self
+            .stack
+            .iter()
+            .filter_map(|frame| frame.component.as_ref())
+        {
             write_component(&mut self.output, component)?;
         }
         if let Some(component) = tail {
@@ -207,13 +230,20 @@ fn write_component(output: &mut impl Write, component: &Component) -> io::Result
 }
 
 fn is_identifier(key: &[u8]) -> bool {
-    let Some((&first, rest)) = key.split_first() else { return false; };
+    let Some((&first, rest)) = key.split_first() else {
+        return false;
+    };
     matches!(first, b'a'..=b'z' | b'A'..=b'Z' | b'_' | b'$')
-        && rest.iter().all(|byte| matches!(byte, b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'_' | b'$'))
+        && rest
+            .iter()
+            .all(|byte| matches!(byte, b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'_' | b'$'))
 }
 
 fn invalid_events() -> io::Error {
-    io::Error::new(io::ErrorKind::InvalidData, "inconsistent json-skimmer event sequence")
+    io::Error::new(
+        io::ErrorKind::InvalidData,
+        "inconsistent json-skimmer event sequence",
+    )
 }
 
 /// Reads a stream to EOF and writes plain FLON output.
@@ -224,19 +254,25 @@ pub fn format<R: Read, W: Write>(mut input: R, output: W) -> io::Result<W> {
 
     loop {
         let count = input.read(&mut buffer)?;
-        if count == 0 { break; }
+        if count == 0 {
+            break;
+        }
         let mut error = None;
         parser.push(&buffer[..count], |event| {
             if error.is_none() {
                 error = formatter.event(event).err();
             }
         });
-        if let Some(error) = error { return Err(error); }
+        if let Some(error) = error {
+            return Err(error);
+        }
     }
 
     let mut error = None;
     parser.finish(|event| error = formatter.event(event).err());
-    if let Some(error) = error { return Err(error); }
+    if let Some(error) = error {
+        return Err(error);
+    }
     Ok(formatter.into_inner())
 }
 
@@ -291,7 +327,10 @@ mod tests {
 
     #[test]
     fn formats_root_arrays() {
-        assert_eq!(flon(br#"[1,"two"]"#), "json = [];\njson[0] = 1;\njson[1] = \"two\";\n");
+        assert_eq!(
+            flon(br#"[1,"two"]"#),
+            "json = [];\njson[0] = 1;\njson[1] = \"two\";\n"
+        );
     }
 
     #[test]
