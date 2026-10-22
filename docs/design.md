@@ -125,10 +125,32 @@ The output buffering modes are:
 
 Live mode is the natural default for unbounded diagnostic streams. Confirmed
 mode is appropriate when syntactically complete FLON output is more important
-than document-sized buffering. In confirmed mode, a malformed candidate can be
-discarded before an error comment is emitted, guaranteeing syntactically valid
-annotated output. Recovery diagnostics remain separate from stdout unless an
-output annotation is explicitly requested.
+than immediate output. Confirmed storage retains up to 128 MiB in memory by
+default, then transfers the current candidate to a private temporary file. The
+default per-candidate generated-output limit is 10 GiB; callers can change the
+memory threshold and total limit, select a spool directory, or explicitly
+choose unlimited storage. These limits reset after every top-level object or
+array and never limit cumulative output from the input stream.
+
+At `CandidateEnd`, confirmed output is copied to the destination and its spool
+is deleted. On invalidation, it is deleted without becoming visible. Root
+declaration state is transactional as well, so the next valid candidate still
+produces the declaration when an initial candidate was discarded. A malformed
+candidate can therefore be replaced by an error comment while preserving
+syntactically valid annotated output.
+
+The formatter reports a structured recovery outcome containing the parse
+error, exact number of confirmed-output bytes discarded, and whether storage
+had spilled to a file. The library never writes process-global stderr. The CLI
+may render these outcomes to stderr according to its diagnostics settings.
+Recovery diagnostics remain separate from stdout unless an output annotation
+is explicitly requested.
+
+Planned CLI profiles expand into ordinary settings rather than adding library
+behavior. `wraith` selects live output, silent invalid-candidate skipping, and
+quiet diagnostics. `infinite` selects confirmed output with a larger memory
+threshold, unlimited per-candidate spool storage, annotated skipping, and
+stderr recovery diagnostics. Explicit CLI options override profile defaults.
 
 ## Parser-event diagnostics
 

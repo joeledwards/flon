@@ -3,6 +3,10 @@
 FLON (FLat Object Notation) converts JSON into ordered, grep-friendly
 assignments without buffering the complete JSON structure.
 
+Live streaming is the default. An optional confirmed mode buffers generated
+output for one top-level candidate, spilling to a private temporary file when
+needed, and releases it only after the candidate is valid.
+
 This Rust implementation is under development alongside `json-skimmer`. The
 initial implementation is a plain-text formatter library; CLI and terminal
 color support will follow after the streaming contract is stable.

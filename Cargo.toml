@@ -9,3 +9,4 @@ categories = ["command-line-utilities", "encoding"]
 
 [dependencies]
 json-skimmer = { version = "0.1.0", path = "../json-skimmer" }
+tempfile = "3.23"

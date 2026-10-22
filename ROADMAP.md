@@ -10,7 +10,8 @@
 - [x] Compile, format, and run the initial test suite
 - [x] Add configurable active-key length limits
 - [x] Define partial-output behavior for invalid speculative candidates
-- [ ] Add bounded confirmed-output mode
+- [x] Add bounded or explicitly unlimited confirmed-output mode
+- [x] Report structured invalid-candidate recovery outcomes
 - [ ] Define a line-delimited JSON parser-event diagnostic format
 - [ ] Port the complete `node-flon` fixture set
 - [ ] Add recovery, Unicode, escaping, precision, and chunk-boundary fixtures
@@ -23,6 +24,8 @@
 - [ ] Add `--invalid=fail|skip|comment`
 - [ ] Add `--output=events` for parser events instead of FLON assignments
 - [ ] Add `--trace-events` for parser events and errors on stderr
+- [ ] Add `wraith` and `infinite` CLI configuration profiles
+- [ ] Add effective-configuration display for profiles and overrides
 - [ ] Treat a closed output pipe as successful early termination
 - [ ] Add elapsed-time summaries
 - [ ] Decide whether URL input belongs in the initial Rust release
