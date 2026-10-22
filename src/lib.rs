@@ -756,6 +756,7 @@ fn error_kind_name(kind: ErrorKind) -> &'static str {
         ErrorKind::UnexpectedByte => "unexpected_byte",
         ErrorKind::InvalidEscape => "invalid_escape",
         ErrorKind::InvalidUnicodeEscape => "invalid_unicode_escape",
+        ErrorKind::InvalidUtf8 => "invalid_utf8",
         ErrorKind::ControlCharacterInString => "control_character_in_string",
         ErrorKind::InvalidNumber => "invalid_number",
         ErrorKind::UnexpectedEnd => "unexpected_end",

@@ -1,6 +1,58 @@
 use super::*;
 
 #[test]
+fn confirmed_output_discards_every_truncated_multibyte_prefix_at_eof() {
+    for character in ['¢', '雪', '😀'] {
+        let bytes = character.to_string().into_bytes();
+        for length in 1..bytes.len() {
+            for prefix in [b"{\"bad\":\"".as_slice(), b"{\""] {
+                let input = [br#"{"ok":1}"#.as_slice(), prefix, &bytes[..length]].concat();
+                for threshold in [0, 4096] {
+                    let spool = tempfile::tempdir().unwrap();
+                    let config = Config {
+                        invalid_candidate: InvalidCandidatePolicy::Skip,
+                        output_mode: OutputMode::Confirmed(ConfirmedOutput {
+                            memory_threshold: threshold,
+                            spool_directory: Some(spool.path().to_owned()),
+                            ..ConfirmedOutput::default()
+                        }),
+                        ..Config::default()
+                    };
+                    for split in 0..=input.len() {
+                        assert_eq!(
+                            render_chunks(&input, config.clone(), &[split]),
+                            b"json = {};\njson.ok = 1;\n",
+                            "{character:?}, prefix {prefix:?}, length {length}, threshold {threshold}, split {split}"
+                        );
+                        assert_eq!(spool.path().read_dir().unwrap().count(), 0);
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn confirmed_utf8_recovery_never_releases_invalid_bytes() {
+    let input = b"{\"bad\":\"\xed\xa0\x80\"} {\"ok\":\"\xf0\x9f\x98\x80\"}";
+    let config = Config {
+        invalid_candidate: InvalidCandidatePolicy::SkipWithComment,
+        output_mode: OutputMode::Confirmed(ConfirmedOutput {
+            memory_threshold: 0,
+            ..ConfirmedOutput::default()
+        }),
+        ..Config::default()
+    };
+    let expected = "\n/* flon-error kind=invalid_utf8 offset=9 candidate_start=0 */\njson = {};\njson.ok = \"😀\";\n";
+    for split in 0..=input.len() {
+        assert_eq!(
+            render_chunks(input, config.clone(), &[split]),
+            expected.as_bytes()
+        );
+    }
+}
+
+#[test]
 #[ignore = "Known bug: EOF error preservation is prioritized in ROADMAP.md; enable with the fix"]
 fn eof_recovery_preserves_the_first_writer_error() {
     // The scalar prefix fits, but NumberEnd's semicolon at EOF fails.
