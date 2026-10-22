@@ -8,7 +8,7 @@
 - [x] Active object-key and array-index path tracking
 - [x] Initial compatibility fixtures based on `node-flon`
 - [x] Compile, format, and run the initial test suite
-- [ ] Add configurable active-key length limits
+- [x] Add configurable active-key length limits
 - [ ] Define partial-output behavior for invalid speculative candidates
 - [ ] Define a line-delimited JSON parser-event diagnostic format
 - [ ] Port the complete `node-flon` fixture set

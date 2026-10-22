@@ -4,12 +4,42 @@ use std::io::{self, Read, Write};
 
 use json_skimmer::{ContainerKind, Event, Parser, StringKind};
 
+/// Default maximum number of raw JSON bytes retained for one object key.
+pub const DEFAULT_MAX_KEY_BYTES: usize = 64 * 1024;
+
+/// Action taken when an object key exceeds [`Config::max_key_bytes`].
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum KeyOverflowPolicy {
+    /// Stop formatting and return an error.
+    Error,
+    /// Validate the rest of the key and skip its complete associated value.
+    SkipValue,
+}
+
+/// Resource limits and overflow behavior for a formatter.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct Config {
+    /// Maximum raw bytes retained for one object key.
+    pub max_key_bytes: usize,
+    pub key_overflow: KeyOverflowPolicy,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            max_key_bytes: DEFAULT_MAX_KEY_BYTES,
+            key_overflow: KeyOverflowPolicy::Error,
+        }
+    }
+}
+
 /// Incrementally translates `json-skimmer` events into FLON assignments.
 pub struct Formatter<W> {
     output: W,
+    config: Config,
     stack: Vec<Frame>,
     string: Option<ActiveString>,
-    number: bool,
+    number: Option<bool>,
     root_written: bool,
 }
 
@@ -17,8 +47,9 @@ pub struct Formatter<W> {
 struct Frame {
     kind: ContainerKind,
     component: Option<Component>,
-    key: Option<Vec<u8>>,
+    key: Option<PendingKey>,
     next_index: u64,
+    suppressed: bool,
 }
 
 #[derive(Debug)]
@@ -27,18 +58,36 @@ enum Component {
     Index(u64),
 }
 
+#[derive(Debug)]
+enum PendingKey {
+    Buffered(Vec<u8>),
+    Skip,
+}
+
 enum ActiveString {
     Key(Vec<u8>),
-    Value,
+    OverflowedKey,
+    DiscardedKey,
+    Value { emitted: bool },
+}
+
+enum ValueTarget {
+    Emit(Component),
+    Skip,
 }
 
 impl<W: Write> Formatter<W> {
     pub fn new(output: W) -> Self {
+        Self::with_config(output, Config::default())
+    }
+
+    pub fn with_config(output: W, config: Config) -> Self {
         Self {
             output,
+            config,
             stack: Vec::new(),
             string: None,
-            number: false,
+            number: None,
             root_written: false,
         }
     }
@@ -60,35 +109,41 @@ impl<W: Write> Formatter<W> {
                 kind: StringKind::Key,
                 ..
             } => {
-                self.string = Some(ActiveString::Key(Vec::new()));
+                let frame = self.stack.last().ok_or_else(invalid_events)?;
+                if frame.kind != ContainerKind::Object {
+                    return Err(invalid_events());
+                }
+                self.string = Some(if frame.suppressed {
+                    ActiveString::DiscardedKey
+                } else {
+                    ActiveString::Key(Vec::new())
+                });
             }
             Event::StringStart {
                 kind: StringKind::Value,
                 ..
             } => {
-                self.begin_scalar()?;
-                self.output.write_all(b"\"")?;
-                self.string = Some(ActiveString::Value);
+                let emitted = self.begin_scalar()?;
+                if emitted {
+                    self.output.write_all(b"\"")?;
+                }
+                self.string = Some(ActiveString::Value { emitted });
             }
-            Event::StringFragment { kind, bytes, .. } => match (kind, self.string.as_mut()) {
-                (StringKind::Key, Some(ActiveString::Key(token))) => token.extend_from_slice(bytes),
-                (StringKind::Value, Some(ActiveString::Value)) => self.output.write_all(bytes)?,
-                _ => return Err(invalid_events()),
-            },
+            Event::StringFragment { kind, bytes, .. } => self.string_fragment(kind, bytes)?,
             Event::StringEnd { kind, .. } => self.end_string(kind)?,
             Event::NumberStart { .. } => {
-                self.begin_scalar()?;
-                self.number = true;
+                self.number = Some(self.begin_scalar()?);
             }
-            Event::NumberFragment { bytes, .. } if self.number => self.output.write_all(bytes)?,
-            Event::NumberFragment { .. } => return Err(invalid_events()),
-            Event::NumberEnd { .. } => {
-                if !self.number {
-                    return Err(invalid_events());
-                }
-                self.number = false;
-                self.output.write_all(b";\n")?;
-            }
+            Event::NumberFragment { bytes, .. } => match self.number {
+                Some(true) => self.output.write_all(bytes)?,
+                Some(false) => {}
+                None => return Err(invalid_events()),
+            },
+            Event::NumberEnd { .. } => match self.number.take() {
+                Some(true) => self.output.write_all(b";\n")?,
+                Some(false) => {}
+                None => return Err(invalid_events()),
+            },
             Event::Boolean { value, .. } => {
                 self.scalar(if value { b"true" } else { b"false" }, false)?;
             }
@@ -102,7 +157,7 @@ impl<W: Write> Formatter<W> {
     fn reset_candidate(&mut self) {
         self.stack.clear();
         self.string = None;
-        self.number = false;
+        self.number = None;
     }
 
     fn open(&mut self, kind: ContainerKind) -> io::Result<()> {
@@ -115,19 +170,26 @@ impl<W: Write> Formatter<W> {
             }
             None
         } else {
-            let component = self.take_component()?;
-            self.write_path(Some(&component))?;
-            self.output.write_all(b" = ")?;
-            self.write_container(kind)?;
-            self.output.write_all(b";\n")?;
-            Some(component)
+            match self.take_target()? {
+                ValueTarget::Emit(component) => {
+                    self.write_path(Some(&component))?;
+                    self.output.write_all(b" = ")?;
+                    self.write_container(kind)?;
+                    self.output.write_all(b";\n")?;
+                    Some(component)
+                }
+                ValueTarget::Skip => None,
+            }
         };
+
+        let suppressed = !self.stack.is_empty() && component.is_none();
 
         self.stack.push(Frame {
             kind,
             component,
             key: None,
             next_index: 0,
+            suppressed,
         });
         Ok(())
     }
@@ -147,16 +209,52 @@ impl<W: Write> Formatter<W> {
                 if frame.kind != ContainerKind::Object {
                     return Err(invalid_events());
                 }
-                frame.key = Some(token);
+                frame.key = Some(PendingKey::Buffered(token));
             }
-            (StringKind::Value, Some(ActiveString::Value)) => self.output.write_all(b"\";\n")?,
+            (StringKind::Key, Some(ActiveString::OverflowedKey | ActiveString::DiscardedKey)) => {
+                let frame = self.stack.last_mut().ok_or_else(invalid_events)?;
+                if frame.kind != ContainerKind::Object {
+                    return Err(invalid_events());
+                }
+                frame.key = Some(PendingKey::Skip);
+            }
+            (StringKind::Value, Some(ActiveString::Value { emitted: true })) => {
+                self.output.write_all(b"\";\n")?;
+            }
+            (StringKind::Value, Some(ActiveString::Value { emitted: false })) => {}
+            _ => return Err(invalid_events()),
+        }
+        Ok(())
+    }
+
+    fn string_fragment(&mut self, kind: StringKind, bytes: &[u8]) -> io::Result<()> {
+        match (kind, self.string.as_mut()) {
+            (StringKind::Key, Some(ActiveString::Key(token))) => {
+                if bytes.len() <= self.config.max_key_bytes.saturating_sub(token.len()) {
+                    token.extend_from_slice(bytes);
+                } else {
+                    match self.config.key_overflow {
+                        KeyOverflowPolicy::Error => return Err(key_overflow()),
+                        KeyOverflowPolicy::SkipValue => {
+                            self.string = Some(ActiveString::OverflowedKey);
+                        }
+                    }
+                }
+            }
+            (StringKind::Key, Some(ActiveString::OverflowedKey | ActiveString::DiscardedKey)) => {}
+            (StringKind::Value, Some(ActiveString::Value { emitted: true })) => {
+                self.output.write_all(bytes)?;
+            }
+            (StringKind::Value, Some(ActiveString::Value { emitted: false })) => {}
             _ => return Err(invalid_events()),
         }
         Ok(())
     }
 
     fn scalar(&mut self, value: &[u8], quoted: bool) -> io::Result<()> {
-        self.begin_scalar()?;
+        if !self.begin_scalar()? {
+            return Ok(());
+        }
         if quoted {
             self.output.write_all(b"\"")?;
         }
@@ -167,26 +265,34 @@ impl<W: Write> Formatter<W> {
         self.output.write_all(b";\n")
     }
 
-    fn begin_scalar(&mut self) -> io::Result<()> {
-        let component = self.take_component()?;
-        self.write_path(Some(&component))?;
-        self.output.write_all(b" = ")
+    fn begin_scalar(&mut self) -> io::Result<bool> {
+        match self.take_target()? {
+            ValueTarget::Emit(component) => {
+                self.write_path(Some(&component))?;
+                self.output.write_all(b" = ")?;
+                Ok(true)
+            }
+            ValueTarget::Skip => Ok(false),
+        }
     }
 
-    fn take_component(&mut self) -> io::Result<Component> {
+    fn take_target(&mut self) -> io::Result<ValueTarget> {
         let frame = self.stack.last_mut().ok_or_else(invalid_events)?;
+        if frame.suppressed {
+            frame.key = None;
+            return Ok(ValueTarget::Skip);
+        }
         match frame.kind {
-            ContainerKind::Object => frame
-                .key
-                .take()
-                .map(Component::Key)
-                .ok_or_else(invalid_events),
+            ContainerKind::Object => match frame.key.take().ok_or_else(invalid_events)? {
+                PendingKey::Buffered(key) => Ok(ValueTarget::Emit(Component::Key(key))),
+                PendingKey::Skip => Ok(ValueTarget::Skip),
+            },
             ContainerKind::Array => {
                 let index = frame.next_index;
                 frame.next_index = frame.next_index.checked_add(1).ok_or_else(|| {
                     io::Error::new(io::ErrorKind::InvalidData, "array index overflow")
                 })?;
-                Ok(Component::Index(index))
+                Ok(ValueTarget::Emit(Component::Index(index)))
             }
         }
     }
@@ -246,10 +352,26 @@ fn invalid_events() -> io::Error {
     )
 }
 
+fn key_overflow() -> io::Error {
+    io::Error::new(
+        io::ErrorKind::InvalidData,
+        "object key exceeds configured byte limit",
+    )
+}
+
 /// Reads a stream to EOF and writes plain FLON output.
 pub fn format<R: Read, W: Write>(mut input: R, output: W) -> io::Result<W> {
+    format_with_config(&mut input, output, Config::default())
+}
+
+/// Reads a stream to EOF using the supplied formatter configuration.
+pub fn format_with_config<R: Read, W: Write>(
+    mut input: R,
+    output: W,
+    config: Config,
+) -> io::Result<W> {
     let mut parser = Parser::default();
-    let mut formatter = Formatter::new(output);
+    let mut formatter = Formatter::with_config(output, config);
     let mut buffer = [0_u8; 8 * 1024];
 
     loop {
@@ -293,6 +415,19 @@ mod tests {
         }
         parser.finish(|event| formatter.event(event).expect("finish formatter"));
         String::from_utf8(formatter.into_inner()).expect("UTF-8 FLON output")
+    }
+
+    fn configured(input: &[u8], max_key_bytes: usize, key_overflow: KeyOverflowPolicy) -> String {
+        let output = format_with_config(
+            input,
+            Vec::new(),
+            Config {
+                max_key_bytes,
+                key_overflow,
+            },
+        )
+        .expect("format configured JSON");
+        String::from_utf8(output).expect("UTF-8 FLON output")
     }
 
     #[test]
@@ -346,6 +481,74 @@ mod tests {
         assert_eq!(
             flon_in_chunks(b"junk {\"a\":1} more junk [true]", 1),
             "json = {};\njson.a = 1;\njson[0] = true;\n"
+        );
+    }
+
+    #[test]
+    fn default_key_limit_is_64_kib_and_errors_on_overflow() {
+        assert_eq!(DEFAULT_MAX_KEY_BYTES, 64 * 1024);
+        assert_eq!(Config::default().key_overflow, KeyOverflowPolicy::Error);
+
+        let key = "a".repeat(DEFAULT_MAX_KEY_BYTES + 1);
+        let input = format!(r#"{{"{key}":1}}"#);
+        let error = format(input.as_bytes(), Vec::new()).expect_err("reject oversized key");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert_eq!(
+            error.to_string(),
+            "object key exceeds configured byte limit"
+        );
+    }
+
+    #[test]
+    fn accepts_a_key_at_the_configured_limit() {
+        assert_eq!(
+            configured(br#"{"abcd":1}"#, 4, KeyOverflowPolicy::Error),
+            "json = {};\njson.abcd = 1;\n"
+        );
+    }
+
+    #[test]
+    fn skips_oversized_scalar_and_container_values_then_resumes() {
+        assert_eq!(
+            configured(
+                br#"{"ok":1,"large-key":{"nested":[1,{"ignored":2}]},"wide-key":"ignored","after":3}"#,
+                5,
+                KeyOverflowPolicy::SkipValue,
+            ),
+            "json = {};\njson.ok = 1;\njson.after = 3;\n"
+        );
+    }
+
+    #[test]
+    fn validates_an_oversized_key_and_recovers_the_next_candidate() {
+        assert_eq!(
+            configured(
+                br#"{"oversized\q":1} {"after":2}"#,
+                5,
+                KeyOverflowPolicy::SkipValue,
+            ),
+            "json = {};\njson.after = 2;\n"
+        );
+    }
+
+    #[test]
+    fn skips_an_oversized_key_across_single_byte_chunks() {
+        let mut parser = Parser::default();
+        let mut formatter = Formatter::with_config(
+            Vec::new(),
+            Config {
+                max_key_bytes: 3,
+                key_overflow: KeyOverflowPolicy::SkipValue,
+            },
+        );
+        for byte in br#"{"oversized":[1,2],"ok":3}"#.chunks(1) {
+            parser.push(byte, |event| formatter.event(event).expect("format event"));
+        }
+        parser.finish(|event| formatter.event(event).expect("finish formatter"));
+
+        assert_eq!(
+            String::from_utf8(formatter.into_inner()).expect("UTF-8 FLON output"),
+            "json = {};\njson.ok = 3;\n"
         );
     }
 }

@@ -56,7 +56,11 @@ The formatter retains:
 
 Scalar string and number contents are written as fragments arrive. They are not
 accumulated. Object keys must be retained until their values begin because the
-key determines the output path. Key storage will have a configurable limit.
+key determines the output path. Raw key storage has a configurable per-key
+limit of 64 KiB by default. Crossing the limit returns an error by default. An
+optional skip policy stops retaining the key, continues parser validation, and
+suppresses its complete associated scalar or container value before resuming
+with the next object member. Oversized keys are never truncated into paths.
 
 Memory is therefore proportional to nesting depth, active key sizes, output
 buffering selected by the caller, and parser limits—not total input size.
