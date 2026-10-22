@@ -1,5 +1,23 @@
 # Roadmap
 
+## Priority follow-up from project review
+
+- [ ] Validate UTF-8 incrementally in `json-skimmer` so confirmed output never
+      releases candidates containing invalid UTF-8.
+- [ ] Add configurable parser nesting limits and expose them through FLON so
+      deeply nested input cannot grow parser and formatter state without bound.
+- [ ] Preserve the first formatter or writer error during EOF processing in
+      `format_with_config`; later recovery events must not clear it. Add a
+      regression test for a failing writer and truncated numeric input (`[1`).
+- [ ] Resolve automatic color against the output destination before formatting
+      so stripped ANSI bytes do not inflate confirmed-buffer accounting. Add a
+      regression test for redirected output with a candidate size limit.
+- [ ] Expand chunk-boundary and invalid-input tests, including UTF-8, nesting
+      limits, EOF recovery, and writer failures, before adding more CLI features.
+- [ ] Update the README's implementation status to reflect the existing CLI
+      and color support, and reconcile parser roadmap items with functionality
+      already demonstrated by FLON.
+
 ## Streaming formatter
 
 - [x] Library-first formatter accepting `json-skimmer` events
