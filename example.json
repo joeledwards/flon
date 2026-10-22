@@ -1,0 +1,22 @@
+{
+  "name": "FLON example",
+  "enabled": true,
+  "missing": null,
+  "count": 3,
+  "precise": 12345678901234567890.00100,
+  "scientific": 6.022e23,
+  "message": "line one\nline two",
+  "unicode": "Hello, 世界",
+  "hyphenated-key": {
+    "empty object": {},
+    "items": [
+      1,
+      "two",
+      false,
+      {
+        "id": 4,
+        "quoted\"key": "preserved"
+      }
+    ]
+  }
+}

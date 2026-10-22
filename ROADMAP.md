@@ -18,7 +18,7 @@
 
 ## Command-line application
 
-- [ ] Add stdin and file input
+- [x] Add stdin and file input
 - [ ] Add buffered and immediate output modes
 - [ ] Add CLI configuration and help
 - [ ] Add `--invalid=fail|skip|comment`
@@ -26,7 +26,7 @@
 - [ ] Add `--trace-events` for parser events and errors on stderr
 - [ ] Add `wraith` and `infinite` CLI configuration profiles
 - [ ] Add effective-configuration display for profiles and overrides
-- [ ] Treat a closed output pipe as successful early termination
+- [x] Treat a closed output pipe as successful early termination
 - [ ] Add elapsed-time summaries
 - [ ] Decide whether URL input belongs in the initial Rust release
 - [ ] Add URL input and explicit TLS policy if retained
