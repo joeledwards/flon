@@ -1,0 +1,11 @@
+[package]
+name = "flon"
+version = "0.1.0"
+edition = "2024"
+description = "Stream JSON as flat, grep-friendly assignments"
+license = "ISC"
+keywords = ["json", "streaming", "flatten", "gron"]
+categories = ["command-line-utilities", "encoding"]
+
+[dependencies]
+json-skimmer = { version = "0.1.0", path = "../json-skimmer" }
