@@ -103,7 +103,20 @@ formatter writes events immediately, so an invalid candidate may already have
 produced assignments or an incomplete scalar line. Those bytes cannot be
 retracted from a generic `Write` destination.
 
-Before the CLI contract is stabilized, FLON must define explicit policies:
+Live formatting has three invalid-candidate policies:
+
+- **Fail** is the default and returns an error immediately.
+- **Skip** resets candidate state and continues scanning silently.
+- **Skip with comment** resets and continues after writing a block comment such
+  as `/* flon-error kind=invalid_escape offset=143 candidate_start=97 */`.
+
+Error comments contain only fixed error names and numeric offsets, never input
+bytes. They are valid JavaScript when emitted at a statement boundary. Because
+live output may already contain an incomplete scalar, annotated live output is
+best-effort and is not guaranteed to remain syntactically valid after an
+error.
+
+The output buffering modes are:
 
 - **Live:** bounded-memory output with documented partial output on invalid
   candidates.
@@ -112,8 +125,10 @@ Before the CLI contract is stabilized, FLON must define explicit policies:
 
 Live mode is the natural default for unbounded diagnostic streams. Confirmed
 mode is appropriate when syntactically complete FLON output is more important
-than document-sized buffering. Recovery diagnostics must remain separate from
-stdout unless explicitly requested so they do not corrupt the data stream.
+than document-sized buffering. In confirmed mode, a malformed candidate can be
+discarded before an error comment is emitted, guaranteeing syntactically valid
+annotated output. Recovery diagnostics remain separate from stdout unless an
+output annotation is explicitly requested.
 
 ## Parser-event diagnostics
 

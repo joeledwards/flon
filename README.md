@@ -16,7 +16,8 @@ become dependencies of `json-skimmer`.
 - Process unbounded input incrementally.
 - Retain only active paths and scalar tokens.
 - Preserve object order and JSON number spelling.
-- Recover and continue when `json-skimmer` finds malformed candidates.
+- Fail, recover silently, or recover with JavaScript comments when
+  `json-skimmer` finds malformed candidates.
 - Write to any `std::io::Write` destination.
 
 See the [roadmap](ROADMAP.md) for current implementation status and planned CLI

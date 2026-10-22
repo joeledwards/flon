@@ -2,7 +2,7 @@
 
 use std::io::{self, Read, Write};
 
-use json_skimmer::{ContainerKind, Event, Parser, StringKind};
+use json_skimmer::{ContainerKind, ErrorKind, Event, ParseError, Parser, StringKind};
 
 /// Default maximum number of raw JSON bytes retained for one object key.
 pub const DEFAULT_MAX_KEY_BYTES: usize = 64 * 1024;
@@ -16,12 +16,24 @@ pub enum KeyOverflowPolicy {
     SkipValue,
 }
 
+/// Action taken when `json-skimmer` reports an invalid JSON candidate.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum InvalidCandidatePolicy {
+    /// Stop formatting and return an error.
+    Fail,
+    /// Reset candidate state and continue scanning without an annotation.
+    Skip,
+    /// Reset, continue scanning, and write a JavaScript block comment.
+    SkipWithComment,
+}
+
 /// Resource limits and overflow behavior for a formatter.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Config {
     /// Maximum raw bytes retained for one object key.
     pub max_key_bytes: usize,
     pub key_overflow: KeyOverflowPolicy,
+    pub invalid_candidate: InvalidCandidatePolicy,
 }
 
 impl Default for Config {
@@ -29,6 +41,7 @@ impl Default for Config {
         Self {
             max_key_bytes: DEFAULT_MAX_KEY_BYTES,
             key_overflow: KeyOverflowPolicy::Error,
+            invalid_candidate: InvalidCandidatePolicy::Fail,
         }
     }
 }
@@ -148,7 +161,7 @@ impl<W: Write> Formatter<W> {
                 self.scalar(if value { b"true" } else { b"false" }, false)?;
             }
             Event::Null { .. } => self.scalar(b"null", false)?,
-            Event::Invalid(_) => self.reset_candidate(),
+            Event::Invalid(error) => self.invalid_candidate(error)?,
             Event::CandidateEnd { .. } => self.reset_candidate(),
         }
         Ok(())
@@ -158,6 +171,33 @@ impl<W: Write> Formatter<W> {
         self.stack.clear();
         self.string = None;
         self.number = None;
+    }
+
+    fn invalid_candidate(&mut self, error: ParseError) -> io::Result<()> {
+        match self.config.invalid_candidate {
+            InvalidCandidatePolicy::Fail => return Err(parse_error(&error)),
+            InvalidCandidatePolicy::Skip => {}
+            InvalidCandidatePolicy::SkipWithComment => {
+                let partial_scalar =
+                    matches!(self.string, Some(ActiveString::Value { emitted: true }))
+                        || self.number == Some(true);
+                if partial_scalar {
+                    self.output.write_all(b"\n")?;
+                }
+                self.output.write_all(b"/* flon-error kind=")?;
+                self.output
+                    .write_all(error_kind_name(error.kind).as_bytes())?;
+                write!(self.output, " offset={}", error.offset)?;
+                if let Some(start) = error.candidate_start {
+                    write!(self.output, " candidate_start={start}")?;
+                } else {
+                    self.output.write_all(b" candidate_start=none")?;
+                }
+                self.output.write_all(b" */\n")?;
+            }
+        }
+        self.reset_candidate();
+        Ok(())
     }
 
     fn open(&mut self, kind: ContainerKind) -> io::Result<()> {
@@ -359,6 +399,33 @@ fn key_overflow() -> io::Error {
     )
 }
 
+fn parse_error(error: &ParseError) -> io::Error {
+    let candidate = error
+        .candidate_start
+        .map_or_else(|| "none".to_owned(), |start| start.to_string());
+    io::Error::new(
+        io::ErrorKind::InvalidData,
+        format!(
+            "invalid JSON candidate: {} at byte {} (candidate start: {candidate})",
+            error_kind_name(error.kind),
+            error.offset
+        ),
+    )
+}
+
+fn error_kind_name(kind: ErrorKind) -> &'static str {
+    match kind {
+        ErrorKind::UnexpectedByte => "unexpected_byte",
+        ErrorKind::InvalidEscape => "invalid_escape",
+        ErrorKind::InvalidUnicodeEscape => "invalid_unicode_escape",
+        ErrorKind::ControlCharacterInString => "control_character_in_string",
+        ErrorKind::InvalidNumber => "invalid_number",
+        ErrorKind::UnexpectedEnd => "unexpected_end",
+        ErrorKind::ExpectedSingleValue => "expected_single_value",
+        ErrorKind::TrailingData => "trailing_data",
+    }
+}
+
 /// Reads a stream to EOF and writes plain FLON output.
 pub fn format<R: Read, W: Write>(mut input: R, output: W) -> io::Result<W> {
     format_with_config(&mut input, output, Config::default())
@@ -424,6 +491,7 @@ mod tests {
             Config {
                 max_key_bytes,
                 key_overflow,
+                ..Config::default()
             },
         )
         .expect("format configured JSON");
@@ -521,12 +589,18 @@ mod tests {
 
     #[test]
     fn validates_an_oversized_key_and_recovers_the_next_candidate() {
+        let output = format_with_config(
+            br#"{"oversized\q":1} {"after":2}"#.as_slice(),
+            Vec::new(),
+            Config {
+                max_key_bytes: 5,
+                key_overflow: KeyOverflowPolicy::SkipValue,
+                invalid_candidate: InvalidCandidatePolicy::Skip,
+            },
+        )
+        .expect("recover invalid oversized key");
         assert_eq!(
-            configured(
-                br#"{"oversized\q":1} {"after":2}"#,
-                5,
-                KeyOverflowPolicy::SkipValue,
-            ),
+            String::from_utf8(output).expect("UTF-8 FLON output"),
             "json = {};\njson.after = 2;\n"
         );
     }
@@ -539,6 +613,7 @@ mod tests {
             Config {
                 max_key_bytes: 3,
                 key_overflow: KeyOverflowPolicy::SkipValue,
+                ..Config::default()
             },
         );
         for byte in br#"{"oversized":[1,2],"ok":3}"#.chunks(1) {
@@ -550,5 +625,54 @@ mod tests {
             String::from_utf8(formatter.into_inner()).expect("UTF-8 FLON output"),
             "json = {};\njson.ok = 3;\n"
         );
+    }
+
+    #[test]
+    fn invalid_candidates_fail_by_default() {
+        assert_eq!(
+            Config::default().invalid_candidate,
+            InvalidCandidatePolicy::Fail
+        );
+        let error = format(br#"{"bad":truX}"#.as_slice(), Vec::new())
+            .expect_err("reject invalid candidate");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert_eq!(
+            error.to_string(),
+            "invalid JSON candidate: unexpected_byte at byte 10 (candidate start: 0)"
+        );
+    }
+
+    #[test]
+    fn can_skip_an_invalid_candidate_silently() {
+        assert_eq!(
+            configured_invalid(br#"{"bad":truX} {"ok":1}"#, InvalidCandidatePolicy::Skip,),
+            "json = {};\njson.ok = 1;\n"
+        );
+    }
+
+    #[test]
+    fn can_annotate_an_invalid_candidate_and_continue() {
+        assert_eq!(
+            configured_invalid(
+                br#"{"bad":truX} {"ok":1}"#,
+                InvalidCandidatePolicy::SkipWithComment,
+            ),
+            "json = {};\n\
+             /* flon-error kind=unexpected_byte offset=10 candidate_start=0 */\n\
+             json.ok = 1;\n"
+        );
+    }
+
+    fn configured_invalid(input: &[u8], invalid_candidate: InvalidCandidatePolicy) -> String {
+        let output = format_with_config(
+            input,
+            Vec::new(),
+            Config {
+                invalid_candidate,
+                ..Config::default()
+            },
+        )
+        .expect("format with invalid-candidate policy");
+        String::from_utf8(output).expect("UTF-8 FLON output")
     }
 }
