@@ -6,6 +6,56 @@ use std::rc::Rc;
 use flon::{Config, ConfirmedOutput, Formatter, InvalidCandidatePolicy, OutputMode, Styling};
 use json_skimmer::Parser;
 
+// These are stream-adapter contracts shared by library and CLI unit tests.
+pub(crate) fn check_depth_limits(mut run: impl FnMut(&[u8], Config) -> io::Result<Vec<u8>>) {
+    assert_eq!(Config::default().max_depth.get(), 1000);
+    for memory_threshold in [0, 4096] {
+        for policy in [
+            InvalidCandidatePolicy::Fail,
+            InvalidCandidatePolicy::Skip,
+            InvalidCandidatePolicy::SkipWithComment,
+        ] {
+            let config = Config {
+                max_depth: std::num::NonZeroUsize::new(1).unwrap(),
+                invalid_candidate: policy,
+                output_mode: OutputMode::Confirmed(ConfirmedOutput {
+                    memory_threshold,
+                    ..ConfirmedOutput::default()
+                }),
+                ..Config::default()
+            };
+            let result = run(b"[[]] {\"ok\":true}", config);
+            if policy == InvalidCandidatePolicy::Fail {
+                let error = result.unwrap_err();
+                assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+                assert_eq!(
+                    error.to_string(),
+                    "invalid JSON candidate: depth_limit_exceeded at byte 1 (candidate start: 0)"
+                );
+            } else {
+                let mut expected = Vec::new();
+                if policy == InvalidCandidatePolicy::SkipWithComment {
+                    expected.extend_from_slice(
+                        b"/* flon-error kind=depth_limit_exceeded offset=1 candidate_start=0 */\n",
+                    );
+                }
+                expected.extend_from_slice(b"json = {};\njson.ok = true;\n");
+                assert_eq!(result.unwrap(), expected);
+            }
+        }
+    }
+    let output = run(
+        b"[[]] [2]",
+        Config {
+            max_depth: std::num::NonZeroUsize::new(1).unwrap(),
+            invalid_candidate: InvalidCandidatePolicy::Skip,
+            ..Config::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(output, b"json = [];\njson[0] = 2;\n");
+}
+
 pub(crate) struct FailOnceWriter {
     remaining: usize,
     failures: Rc<Cell<usize>>,

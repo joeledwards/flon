@@ -2,6 +2,7 @@ use std::env;
 use std::ffi::OsStr;
 use std::fs::File;
 use std::io::{self, BufWriter, IsTerminal, Read, Write};
+use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -16,7 +17,7 @@ use json_skimmer::Parser;
 const INFINITE_MEMORY_BYTES: u64 = 512 * 1024 * 1024;
 
 #[cfg(test)]
-mod eof_test_support;
+mod stream_test_support;
 
 #[derive(ClapParser, Debug)]
 #[command(version, about = "Stream JSON as flat, grep-friendly assignments")]
@@ -35,6 +36,10 @@ struct Cli {
     /// Maximum raw bytes retained for one object key.
     #[arg(long, value_parser = parse_size)]
     max_key_bytes: Option<u64>,
+
+    /// Maximum open containers, including the root (default: 1000; must be positive).
+    #[arg(long)]
+    max_depth: Option<NonZeroUsize>,
 
     /// Action to take when an object key exceeds its byte limit.
     #[arg(long, value_enum)]
@@ -202,6 +207,9 @@ fn resolve(cli: &Cli) -> EffectiveConfig {
     if let Some(maximum) = cli.max_key_bytes {
         formatter.max_key_bytes = usize::try_from(maximum).unwrap_or(usize::MAX);
     }
+    if let Some(maximum) = cli.max_depth {
+        formatter.max_depth = maximum;
+    }
     if let Some(overflow) = cli.key_overflow {
         formatter.key_overflow = match overflow {
             KeyOverflowAction::Error => KeyOverflowPolicy::Error,
@@ -302,7 +310,8 @@ fn format_stream<R: Read, W: Write>(
     output: W,
     effective: EffectiveConfig,
 ) -> io::Result<W> {
-    let mut parser = Parser::default();
+    let mut parser =
+        Parser::with_max_depth(json_skimmer::Mode::Scan, effective.formatter.max_depth);
     let mut formatter = Formatter::with_config(output, effective.formatter);
     let mut buffer = [0_u8; 8 * 1024];
 
@@ -399,8 +408,43 @@ mod tests {
     use super::*;
 
     #[test]
+    fn stream_adapter_enforces_depth_and_recovers() {
+        crate::stream_test_support::check_depth_limits(|input, formatter| {
+            format_stream(
+                input,
+                Vec::new(),
+                EffectiveConfig {
+                    formatter,
+                    diagnostics: Diagnostics::Quiet,
+                    color: ColorChoice::Never,
+                },
+            )
+        });
+    }
+
+    #[test]
+    fn depth_option_requires_positive_values_and_overrides_profiles() {
+        assert_eq!(resolve(&cli(&[])).formatter.max_depth.get(), 1000);
+        for profile in ["wraith", "infinite"] {
+            assert_eq!(
+                resolve(&cli(&["--profile", profile, "--max-depth", "12"]))
+                    .formatter
+                    .max_depth
+                    .get(),
+                12
+            );
+        }
+        for value in ["0", "-1", "abc", "999999999999999999999999999999999999"] {
+            assert!(
+                Cli::try_parse_from(["flon", "--max-depth", value]).is_err(),
+                "{value}"
+            );
+        }
+    }
+
+    #[test]
     fn eof_policies_preserve_parse_and_confirmed_limit_errors() {
-        crate::eof_test_support::check_eof_policies(|input, formatter| {
+        crate::stream_test_support::check_eof_policies(|input, formatter| {
             format_stream(
                 input,
                 Vec::new(),
@@ -415,7 +459,7 @@ mod tests {
 
     #[test]
     fn eof_errors_stop_output_for_all_recovery_policies() {
-        crate::eof_test_support::check_eof_writer_errors(|input, writer, formatter| {
+        crate::stream_test_support::check_eof_writer_errors(|input, writer, formatter| {
             format_stream(
                 input,
                 writer,

@@ -4,7 +4,7 @@
 
 - [x] Validate UTF-8 incrementally in `json-skimmer` so confirmed output never
       releases candidates containing invalid UTF-8.
-- [ ] Add configurable parser nesting limits and expose them through FLON so
+- [x] Add configurable parser nesting limits and expose them through FLON so
       deeply nested input cannot grow parser and formatter state without bound.
 - [x] Preserve the first formatter or writer error during EOF processing in
       `format_with_config`; later recovery events must not clear it. Add a

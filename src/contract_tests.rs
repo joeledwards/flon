@@ -1,15 +1,38 @@
 use super::*;
 
 #[test]
+fn stream_adapter_enforces_depth_and_recovers() {
+    crate::stream_test_support::check_depth_limits(|input, config| {
+        format_with_config(input, Vec::new(), config)
+    });
+    let input = b"[[]] {\"ok\":true}";
+    let config = Config {
+        max_depth: std::num::NonZeroUsize::new(1).unwrap(),
+        invalid_candidate: InvalidCandidatePolicy::Skip,
+        output_mode: OutputMode::Confirmed(ConfirmedOutput {
+            memory_threshold: 0,
+            ..ConfirmedOutput::default()
+        }),
+        ..Config::default()
+    };
+    for split in 0..=input.len() {
+        assert_eq!(
+            render_chunks(input, config.clone(), &[split]),
+            b"json = {};\njson.ok = true;\n"
+        );
+    }
+}
+
+#[test]
 fn eof_policies_preserve_parse_and_confirmed_limit_errors() {
-    crate::eof_test_support::check_eof_policies(|input, config| {
+    crate::stream_test_support::check_eof_policies(|input, config| {
         format_with_config(input, Vec::new(), config)
     });
 }
 
 #[test]
 fn eof_errors_stop_output_for_all_recovery_policies() {
-    crate::eof_test_support::check_eof_writer_errors(|input, writer, config| {
+    crate::stream_test_support::check_eof_writer_errors(|input, writer, config| {
         format_with_config(input, writer, config)
     });
 }
@@ -90,7 +113,7 @@ fn eof_recovery_preserves_the_first_writer_error() {
 }
 
 fn render_chunks(input: &[u8], config: Config, cuts: &[usize]) -> Vec<u8> {
-    let mut parser = Parser::default();
+    let mut parser = Parser::with_max_depth(json_skimmer::Mode::Scan, config.max_depth);
     let mut formatter = Formatter::with_config(Vec::new(), config);
     let mut start = 0;
     for &end in cuts {

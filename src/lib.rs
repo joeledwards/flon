@@ -2,6 +2,7 @@
 
 use std::fs::File;
 use std::io::{self, Read, Seek, Write};
+use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 
 use anstyle::{Ansi256Color, AnsiColor, Style};
@@ -74,6 +75,9 @@ pub enum Styling {
 /// Resource limits and overflow behavior for a formatter.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Config {
+    /// Maximum open containers in the stream adapters, including the root.
+    /// Callers feeding events directly must configure their parser separately.
+    pub max_depth: NonZeroUsize,
     /// Maximum raw bytes retained for one object key.
     pub max_key_bytes: usize,
     pub key_overflow: KeyOverflowPolicy,
@@ -85,6 +89,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
+            max_depth: json_skimmer::DEFAULT_MAX_DEPTH,
             max_key_bytes: DEFAULT_MAX_KEY_BYTES,
             key_overflow: KeyOverflowPolicy::Error,
             invalid_candidate: InvalidCandidatePolicy::Fail,
@@ -757,6 +762,7 @@ fn error_kind_name(kind: ErrorKind) -> &'static str {
         ErrorKind::InvalidEscape => "invalid_escape",
         ErrorKind::InvalidUnicodeEscape => "invalid_unicode_escape",
         ErrorKind::InvalidUtf8 => "invalid_utf8",
+        ErrorKind::DepthLimitExceeded => "depth_limit_exceeded",
         ErrorKind::ControlCharacterInString => "control_character_in_string",
         ErrorKind::InvalidNumber => "invalid_number",
         ErrorKind::UnexpectedEnd => "unexpected_end",
@@ -776,7 +782,7 @@ pub fn format_with_config<R: Read, W: Write>(
     output: W,
     config: Config,
 ) -> io::Result<W> {
-    let mut parser = Parser::default();
+    let mut parser = Parser::with_max_depth(json_skimmer::Mode::Scan, config.max_depth);
     let mut formatter = Formatter::with_config(output, config);
     let mut buffer = [0_u8; 8 * 1024];
 
@@ -1225,4 +1231,4 @@ mod contract_tests;
 #[cfg(test)]
 extern crate self as flon;
 #[cfg(test)]
-mod eof_test_support;
+mod stream_test_support;

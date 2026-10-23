@@ -55,6 +55,10 @@ Live output with invalid candidates treated as errors is the default. Use
   example.json
 ```
 
+Nesting is limited to 1,000 open containers by default, counting the root as
+depth one. Use `--max-depth N` to select a positive limit. Exceeding it follows
+the selected invalid-candidate policy.
+
 Explicit options override profile defaults. `--show-config` prints the resolved
 configuration without processing input.
 

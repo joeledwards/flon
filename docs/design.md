@@ -201,3 +201,11 @@ parser events, including EOF events. After a formatter error, subsequent events
 from that parser call are not forwarded to the formatter and cannot trigger
 recovery writes or replace the original error. Without an earlier error, EOF
 parse errors continue to follow the configured invalid-candidate policy.
+
+The stream adapters use `Config::max_depth`, a positive `NonZeroUsize` with a
+default of 1,000, to configure `json-skimmer`. The CLI exposes it as
+`--max-depth N`; explicit values override profiles. The root has depth one.
+Depth-limit errors follow the selected invalid-candidate policy: confirmed
+output is discarded, while live bytes already emitted remain visible. Callers
+feeding events directly to `Formatter` must configure their own parser’s
+limit; the formatter does not reinterpret parser events as input errors.
