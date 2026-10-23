@@ -6,12 +6,22 @@ acceptance gates remain recorded in ROADMAP.md.
 
 ## Dependency sequence
 
-During coordinated preparation, FLON uses a version+path dependency on the
-local json-skimmer 1.0.0. This verifies parser changes before publication.
-After parser publication, remove the path, leaving `json-skimmer = "1.0.0"`,
-fetch that registry package and refresh Cargo.lock. Verify parser and generator
-entries have registry sources/checksums and no patch override is active.
-Final package verification must use that actual published artifact.
+The developer confirmed json-skimmer 1.0.0 publication. FLON now uses
+`json-skimmer = "1.0.0"` from crates.io. Its lockfile records the registry source
+and checksum `a17c31d2be00a974a679e9947a02ad81c485b492694f797ce7e174f02bd08ec1`.
+Offline locked Cargo metadata confirms registry resolution; no local parser
+path or patch override is used. The generator remains a registry-only
+library development dependency. No unrelated dependencies were updated.
+
+On 2026-10-23, registry-backed Rust 1.87 checks passed: 45 library and 46 binary
+unit tests, documentation tests (zero), documentation build and full package
+verification. Stable Clippy lib/bins/tests passed with warnings denied.
+All six compiled CLI acceptance tests also passed against the registry
+dependency on Rust 1.87 after the developer requested pre-commit verification:
+stdin/file/buffering output, profiles, color precedence, invalid/truncated
+inputs, confirmed spill/discard/cleanup and broken pipes. This brings the
+registry-backed library/binary/CLI total to 97 passing tests. Remaining
+performance/reference gates in ROADMAP.md are not cleared by package success.
 
 ## Local checks
 

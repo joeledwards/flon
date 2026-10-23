@@ -72,7 +72,7 @@ pending validation and publication remain unchecked. See
 - [x] Establish and test a minimum supported Rust version (1.87; 92 tests passed)
 - [x] Review public formatter/configuration APIs and document stable defaults
 - [ ] Run final unit, documentation, formatting, lint, and authorized release checks
-- [ ] Update the parser dependency to the published `json-skimmer` 1.0 version
+- [x] Update the parser dependency to the published `json-skimmer` 1.0 version
       requirement and verify the publishable package
 - [ ] Publish FLON 1.0.0 after the coordinated parser release
 
