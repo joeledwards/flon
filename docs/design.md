@@ -209,3 +209,8 @@ Depth-limit errors follow the selected invalid-candidate policy: confirmed
 output is discarded, while live bytes already emitted remain visible. Callers
 feeding events directly to `Formatter` must configure their own parser’s
 limit; the formatter does not reinterpret parser events as input errors.
+
+The CLI resolves automatic color against stdout before constructing the
+formatter. Redirected automatic output generates plain bytes, matching
+`--color=never` for confirmed-output thresholds and candidate limits. Forced
+color and automatic terminal color retain ANSI bytes in buffer accounting.

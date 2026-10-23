@@ -155,7 +155,9 @@ fn main() -> ExitCode {
 }
 
 fn run(cli: Cli) -> io::Result<()> {
-    let effective = resolve(&cli);
+    let stdout = io::stdout();
+    let is_terminal = stdout.is_terminal();
+    let effective = resolve(&cli, is_terminal);
     if cli.show_config {
         println!("{effective:#?}");
         return Ok(());
@@ -167,15 +169,14 @@ fn run(cli: Cli) -> io::Result<()> {
         Some(path) => Box::new(File::open(path)?),
     };
 
-    let stdout = io::stdout();
-    let stream_choice = effective.color.stream_choice(stdout.is_terminal());
+    let stream_choice = effective.color.stream_choice(is_terminal);
     let output = AutoStream::new(stdout.lock(), stream_choice);
     let output = BufWriter::new(output);
     let mut output = format_stream(&mut input, output, effective)?;
     output.flush()
 }
 
-fn resolve(cli: &Cli) -> EffectiveConfig {
+fn resolve(cli: &Cli, is_terminal: bool) -> EffectiveConfig {
     let mut formatter = Config::default();
     let mut diagnostics = Diagnostics::Stderr;
 
@@ -255,7 +256,7 @@ fn resolve(cli: &Cli) -> EffectiveConfig {
     }
 
     let color = resolve_color(cli);
-    formatter.styling = if color == ColorChoice::Never {
+    formatter.styling = if color.stream_choice(is_terminal) == StreamColorChoice::Never {
         Styling::Plain
     } else {
         Styling::Ansi
@@ -406,6 +407,88 @@ fn parse_size(value: &str) -> Result<u64, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn resolve(cli: &Cli) -> EffectiveConfig {
+        super::resolve(cli, false)
+    }
+
+    #[test]
+    fn destination_resolves_auto_styling_before_formatting() {
+        for (choice, terminal, styling) in [
+            ("auto", false, Styling::Plain),
+            ("auto", true, Styling::Ansi),
+            ("never", false, Styling::Plain),
+            ("never", true, Styling::Plain),
+            ("always", false, Styling::Ansi),
+            ("always", true, Styling::Ansi),
+        ] {
+            let effective = super::resolve(&cli(&["--color", choice]), terminal);
+            assert_eq!(
+                effective.formatter.styling, styling,
+                "{choice}, terminal={terminal}"
+            );
+            let output = format_stream(b"[1]".as_slice(), Vec::new(), effective).unwrap();
+            assert_eq!(output.contains(&0x1b), styling == Styling::Ansi);
+            if styling == Styling::Plain {
+                assert_eq!(output, b"json = [];\njson[0] = 1;\n");
+            }
+        }
+    }
+
+    #[test]
+    fn redirected_auto_and_never_have_identical_confirmed_limits() {
+        let plain = b"json = {};\njson.a = 1;\n";
+        for threshold in [0, plain.len() as u64] {
+            for limit in [plain.len() as u64 - 1, plain.len() as u64] {
+                for choice in ["auto", "never"] {
+                    let mut effective = super::resolve(&cli(&["--color", choice]), false);
+                    effective.formatter.output_mode = OutputMode::Confirmed(ConfirmedOutput {
+                        memory_threshold: threshold,
+                        candidate_limit: Some(limit),
+                        spool_directory: None,
+                    });
+                    let result = format_stream(br#"{"a":1}"#.as_slice(), Vec::new(), effective);
+                    if limit < plain.len() as u64 {
+                        assert_eq!(result.unwrap_err().kind(), io::ErrorKind::OutOfMemory);
+                    } else {
+                        assert_eq!(result.unwrap(), plain, "{choice}, threshold={threshold}");
+                    }
+                }
+            }
+        }
+        for (choice, terminal) in [("auto", true), ("always", false)] {
+            let mut effective = super::resolve(&cli(&["--color", choice]), terminal);
+            effective.formatter.output_mode = OutputMode::Confirmed(ConfirmedOutput {
+                candidate_limit: Some(plain.len() as u64),
+                ..ConfirmedOutput::default()
+            });
+            assert_eq!(
+                format_stream(br#"{"a":1}"#.as_slice(), Vec::new(), effective)
+                    .unwrap_err()
+                    .kind(),
+                io::ErrorKind::OutOfMemory
+            );
+        }
+    }
+
+    #[test]
+    fn redirected_auto_does_not_spill_for_invisible_style_bytes() {
+        let spool = tempfile::tempdir().unwrap();
+        // A nonexistent spool path makes any accidental spill observable.
+        let unavailable = spool.path().join("not-created");
+        for choice in ["auto", "never"] {
+            let mut effective = super::resolve(&cli(&["--color", choice]), false);
+            effective.formatter.output_mode = OutputMode::Confirmed(ConfirmedOutput {
+                memory_threshold: b"json = {};\njson.a = 1;\n".len() as u64,
+                candidate_limit: None,
+                spool_directory: Some(unavailable.clone()),
+            });
+            assert_eq!(
+                format_stream(br#"{"a":1}"#.as_slice(), Vec::new(), effective).unwrap(),
+                b"json = {};\njson.a = 1;\n"
+            );
+        }
+    }
 
     #[test]
     fn stream_adapter_enforces_depth_and_recovers() {

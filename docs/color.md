@@ -53,7 +53,13 @@ The CLI should expose:
 - `never` emits plain output.
 
 Automatic color must normally be disabled for pipes and files because FLON is
-designed for line-oriented pipelines.
+designed for line-oriented pipelines. The CLI resolves the destination before
+formatting: redirected `auto` selects plain rendering, so ANSI bytes are never
+generated or counted toward confirmed-output memory thresholds and candidate
+limits. `always` and terminal `auto` retain styling, and their generated ANSI
+bytes count toward those storage limits. `--show-config` reports formatter
+styling resolved for the current stdout destination while retaining the
+requested color policy.
 
 ## Environment conventions
 
