@@ -201,9 +201,22 @@ separate FLON timing. The generator is not shipped with FLON.
 
 ## Release plan
 
-Publish initial **0.1.0** releases, json-skimmer first and FLON second. This
-makes the current streaming core available while its APIs are still pre-1.0.
-The 1.0 stability and validation gates remain tracked in the [roadmap](ROADMAP.md).
-See [release instructions](docs/releasing.md) for package checks, publication
-order and remaining limitations. Convenience adapters are later 1.x candidates;
-no release dates are assigned.
+The initial 0.1.0 releases are published. The next coordinated releases are
+**1.0.0**, json-skimmer first and FLON second. The core feature scope and
+remaining validation gates are tracked in the [roadmap](ROADMAP.md).
+See [release instructions](docs/releasing.md) for checks and publication order.
+Convenience adapters remain later 1.x candidates; no release dates are assigned.
+
+## Stable defaults and failure behavior
+
+The library defaults to plain live output, failure on invalid candidates,
+a 64 KiB raw-key limit with failure on overflow, maximum container depth 1,000,
+and unlimited candidate input bytes. Confirmed output defaults to 128 MiB of
+memory and a 10 GiB generated-output limit per candidate. CLI buffering defaults
+to 8 KiB buffered delivery and color to destination-dependent `auto`.
+
+`offset_overflow` is terminal even under skip/comment recovery: input cannot
+be processed past the parser's representable offset. Confirmed output for the
+unfinished candidate is discarded; previously committed output remains visible.
+Processing and writer errors stop formatting; a downstream broken pipe is a
+successful early exit only in the CLI. See [API stability](docs/api-stability.md).

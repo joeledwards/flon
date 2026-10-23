@@ -2,18 +2,15 @@
 
 ## Release sequence and scope
 
-Publish initial **0.1.0 releases** to establish the crate names and make the
-implemented streaming core available. Publish json-skimmer first, then FLON
-against json-skimmer 0.1.0. json-volcano 1.0.0 is already published and is a
-registry development dependency in both consumers, with CLI features disabled.
-See [release instructions](docs/releasing.md) for checks, publication order and
-known pre-1.0 limitations. External checks and publication remain developer-run.
+The 0.1.0 releases are published and their GitHub repositories are public.
+The next coordinated release is **1.0.0**: finish the core and validation gates,
+publish json-skimmer first, then FLON against that registry dependency.
+json-volcano 1.0.0 remains a library-only development dependency.
 
-The 1.0 checklists below remain the stability target, rather than a claim that
-0.1 has passed every 1.0 acceptance gate. Parser decoding/path convenience
-adapters are later work, not prerequisites for either initial release. FLON
-already consumes only public raw parser events. Checked items represent
-implemented/verified work; pending tests and audits stay unchecked.
+Parser decoding/path convenience adapters remain later work. FLON consumes
+public raw parser events. Checked items represent implemented/verified work;
+pending validation and publication remain unchecked. See
+[API stability](docs/api-stability.md) and the coverage matrix for contracts.
 
 ## 1.0.0 — formatter and compatibility
 
@@ -58,7 +55,7 @@ implemented/verified work; pending tests and audits stay unchecked.
 
 - [x] README examples for JSON/plain output, library use, stdin/files, profiles,
       recovery, confirmed output, and color
-- [ ] Complete compiled-CLI integration tests for input/output, pipes, errors,
+- [x] Complete compiled-CLI integration tests for input/output, pipes, errors,
       configuration/environment precedence, and output buffering
 - [ ] Validate Node/Rust plain-output equivalence on seeded fixtures before
       claiming equivalent-work speedups (assignment counts/order, bytes/hashes,
@@ -70,8 +67,8 @@ implemented/verified work; pending tests and audits stay unchecked.
       and missing-case reasons to the [results log](docs/performance-results.md)
 - [x] Check registry index for an existing package (no `flon` entry at 0.1 preparation; publication confirms availability)
 - [x] Complete licensing files and package metadata
-- [ ] Establish and test a minimum supported Rust version
-- [ ] Review public formatter/configuration APIs and document stable defaults
+- [x] Establish and test a minimum supported Rust version (1.87; 92 tests passed)
+- [x] Review public formatter/configuration APIs and document stable defaults
 - [ ] Run final unit, documentation, formatting, lint, and authorized release checks
 - [ ] Update the parser dependency to the published `json-skimmer` 1.0 version
       requirement and verify the publishable package

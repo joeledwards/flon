@@ -52,8 +52,8 @@ impl Corpus {
             self.pending
                 .extend_from_slice(tokens[(self.state >> 61) as usize]);
         }
-        let invalid =
-            self.scenario == "invalid" || (self.scenario == "mixed" && self.remaining % 2 == 0);
+        let invalid = self.scenario == "invalid"
+            || (self.scenario == "mixed" && self.remaining.is_multiple_of(2));
         self.pending.extend_from_slice(if invalid {
             b"\",\"bad\":truX}\n"
         } else {

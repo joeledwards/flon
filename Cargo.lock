@@ -128,7 +128,7 @@ checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
 
 [[package]]
 name = "flon"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anstream",
  "anstyle",
@@ -163,9 +163,7 @@ checksum = "a6cb138bb79a146c1bd460005623e142ef0181e3d0219cb493e02f7d08a35695"
 
 [[package]]
 name = "json-skimmer"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "16004708a718e23cad57c174cda822de289a419a6f5313a461dfe7e0344b9faf"
+version = "1.0.0"
 
 [[package]]
 name = "json-volcano"

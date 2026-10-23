@@ -468,6 +468,9 @@ impl<W: Write> Formatter<W> {
         if self.output.is_confirmed() {
             self.root_written = self.candidate_root_written;
         }
+        if error.kind == ErrorKind::OffsetOverflow {
+            return Err(parse_error(&error));
+        }
         match self.config.invalid_candidate {
             InvalidCandidatePolicy::Fail => return Err(parse_error(&error)),
             InvalidCandidatePolicy::Skip => {}
@@ -762,6 +765,7 @@ fn parse_error(error: &ParseError) -> io::Error {
 
 fn error_kind_name(kind: ErrorKind) -> &'static str {
     match kind {
+        ErrorKind::OffsetOverflow => "offset_overflow",
         ErrorKind::UnexpectedByte => "unexpected_byte",
         ErrorKind::InvalidEscape => "invalid_escape",
         ErrorKind::InvalidUnicodeEscape => "invalid_unicode_escape",

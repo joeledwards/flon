@@ -1,7 +1,8 @@
 [package]
 name = "flon"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2024"
+rust-version = "1.87"
 description = "Stream JSON as flat, grep-friendly assignments"
 license = "ISC"
 repository = "https://github.com/joeledwards/flon"
@@ -14,7 +15,7 @@ include = ["src/**", "tests/**", "docs/**", "README.md", "ROADMAP.md", "LICENSE"
 anstream = "1.0"
 anstyle = "1.0"
 clap = { version = "4.5", features = ["derive"] }
-json-skimmer = "0.1.0"
+json-skimmer = { version = "1.0.0", path = "../json-skimmer" }
 tempfile = "3.23"
 
 [dev-dependencies]

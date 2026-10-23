@@ -1,16 +1,17 @@
-# Releasing FLON 0.1.0
+# Releasing FLON 1.0.0
 
-Publish json-skimmer 0.1.0 first, then this initial pre-1.0 formatter/CLI. Core
-formatter and CLI features are implemented; unchecked 1.0 acceptance gates
-remain work for later releases. json-volcano 1.0.0 is already a crates.io
-library-only development dependency.
+The 0.1.0 release is published. Release json-skimmer 1.0.0 first, then FLON
+1.0.0. Core formatter/CLI features and the API review are implemented; open
+acceptance gates remain recorded in ROADMAP.md.
 
 ## Dependency sequence
 
-json-skimmer 0.1.0 is published. FLON now uses `json-skimmer = "0.1.0"`
-from crates.io, without a sibling path or patch. Verify parser and generator
-lock entries contain registry sources and checksums, and run the checks below
-against those registry artifacts before publication.
+During coordinated preparation, FLON uses a version+path dependency on the
+local json-skimmer 1.0.0. This verifies parser changes before publication.
+After parser publication, remove the path, leaving `json-skimmer = "1.0.0"`,
+fetch that registry package and refresh Cargo.lock. Verify parser and generator
+entries have registry sources/checksums and no patch override is active.
+Final package verification must use that actual published artifact.
 
 ## Local checks
 
@@ -20,23 +21,25 @@ From this repository, using the workspace-local toolchain:
 ../../scripts/with-rust cargo fmt --check
 ../../scripts/with-rust cargo test --offline --locked --lib --bins
 ../../scripts/with-rust cargo test --offline --locked --doc
-../../scripts/with-rust cargo clippy --offline --locked --lib --bins -- -D warnings
+../../scripts/with-rust cargo clippy --offline --locked --lib --bins --tests -- -D warnings
 ../../scripts/with-rust cargo doc --offline --locked --no-deps
 ../../scripts/with-rust cargo package --offline --locked --allow-dirty --list
 ../../scripts/with-rust cargo package --offline --locked --allow-dirty
 ```
 
-Package compilation needs the published parser dependency available in the
-registry cache. Review package contents and ensure root performance.jsonl and
-large generated input files are excluded. `--allow-dirty` allows reviewing the
-prepared files without an agent changing Git state. The developer reviews and
-commits the release before publishing.
+The compiled CLI suite is separate and needs explicit integration-test
+authorization under the workspace rules:
 
-The workspace's `scripts/check-flon-pipeline` is a developer-run compiled CLI
-smoke check, separate from unit tests. It builds the local generator binary,
-uses the published generator library dependency, and checks confirmed-output
-recovery, spill and cleanup. It does not replace a complete CLI acceptance suite
-or performance validation. Follow docs/performance.md for optional heavy checks.
+```bash
+../../scripts/with-rust cargo test --offline --locked --test cli
+```
+
+The declared minimum compiler is Rust 1.87. The developer passed all 92
+library/binary/compiled-CLI tests on Rust 1.87.0. Complete the performance and
+reference-output checks in docs/performance.md. Review the package list: license,
+docs, source/tests and example included; root performance.jsonl and generated
+large inputs excluded. `--allow-dirty` permits review without Git mutations.
+The developer reviews and commits the final release before publishing.
 
 ## Publishing (developer-run)
 
@@ -47,9 +50,9 @@ cargo publish --dry-run --locked
 cargo publish --locked
 ```
 
-## Pre-1.0 limitations
+## Scope and stable contract
 
-No MSRV is established. Fuller compiled-CLI acceptance, independent Node/Rust
-output comparisons, repeated throughput/RSS/storage measurements and stable API
-review remain open. URL fetching is intentionally delegated to external tools.
-See ROADMAP.md and docs/test-coverage.md; do not claim all 1.0 gates are complete.
+See [API stability](api-stability.md) for defaults, streaming/confirmed behavior,
+error propagation and extension policy. Event diagnostics and palette
+conveniences remain later features. URL fetching stays with external tools.
+Open validation gates must not be marked complete based only on unit results.

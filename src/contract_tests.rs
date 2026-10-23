@@ -558,3 +558,26 @@ fn published_volcano_fixtures_commit_valid_candidates_and_discard_failures() {
         }
     }
 }
+
+#[test]
+fn offset_exhaustion_is_fatal_even_with_recovery_enabled() {
+    for policy in [
+        InvalidCandidatePolicy::Fail,
+        InvalidCandidatePolicy::Skip,
+        InvalidCandidatePolicy::SkipWithComment,
+    ] {
+        let config = Config {
+            invalid_candidate: policy,
+            ..Config::default()
+        };
+        let mut formatter = Formatter::with_config(Vec::new(), config);
+        let error = formatter
+            .event(Event::Invalid(ParseError {
+                kind: ErrorKind::OffsetOverflow,
+                candidate_start: None,
+                offset: u64::MAX,
+            }))
+            .expect_err("unrecoverable parser exhaustion must not silently truncate input");
+        assert!(error.to_string().contains("offset_overflow"));
+    }
+}
