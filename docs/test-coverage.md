@@ -8,7 +8,7 @@ policy tests live in `src/output_tests.rs`; summary metrics tests live in
 
 | Behavior | Coverage | Remaining gaps |
 | --- | --- | --- |
-| Plain assignments and paths | All 20 distinct active Node fixtures plus eight Rust extensions for scalars, nesting, empty containers, duplicate keys, Unicode/escaped keys, number precision | Disabled legacy junk fixture needs review; reference CLI execution |
+| Plain assignments and paths | All 20 distinct active Node fixtures plus eight Rust extensions for scalars, nesting, empty containers, duplicate keys, Unicode/escaped keys, number precision; full disabled legacy junk fixture with corrected three-string/fourth-element indexes across chunk divisions in live/confirmed modes | Reference CLI execution |
 | Chunk independence | Exact-output corpus in live and file-backed confirmed modes, every two-chunk split and one-byte chunks | Deterministic random formatter partitions |
 | Recovery | Fail/skip/comment policies, path/index reset, transactional root rollback, invalid UTF-8 discard in file-backed confirmed output | Broader malformed-input corpus |
 | Depth limits | Default 1000, positive CLI values and profile overrides; shared library/CLI fail/skip/comment recovery checks, memory/file-backed discard, live partial output; chunk divisions | Broader deep-path stress tests |

@@ -163,3 +163,54 @@ fn rust_extensions_preserve_escaping_precision_and_stream_order() {
         assert_fixture(fixture);
     }
 }
+
+#[test]
+fn legacy_junk_fixture_preserves_all_array_elements() {
+    // The disabled Node expectation omitted the third string and shifted the
+    // fourth element to index 2. Preserve every element in encounter order.
+    assert_fixture(fixture(
+        "legacy junk fixture with corrected indexes",
+        r#"
+        {
+          "name": "willy",
+          "meta": [
+            {"key": "thing", "value": "is cool"},
+            {"key": "other", "value": "is also cool"}
+          ]
+        }
+        junk
+        {
+          "disposition": "free",
+          "turtles": {"turtles": {"turtles": {"turtles": [
+            "turtles", "turtles", "turtles",
+            {"turtles": {"turtles": "turtles"}}
+          ]}}}
+        }
+        more junk
+        {"name": "leroy"}
+        "#,
+        concat!(
+            "json = {};\n",
+            "json.name = \"willy\";\n",
+            "json.meta = [];\n",
+            "json.meta[0] = {};\n",
+            "json.meta[0].key = \"thing\";\n",
+            "json.meta[0].value = \"is cool\";\n",
+            "json.meta[1] = {};\n",
+            "json.meta[1].key = \"other\";\n",
+            "json.meta[1].value = \"is also cool\";\n",
+            "json.disposition = \"free\";\n",
+            "json.turtles = {};\n",
+            "json.turtles.turtles = {};\n",
+            "json.turtles.turtles.turtles = {};\n",
+            "json.turtles.turtles.turtles.turtles = [];\n",
+            "json.turtles.turtles.turtles.turtles[0] = \"turtles\";\n",
+            "json.turtles.turtles.turtles.turtles[1] = \"turtles\";\n",
+            "json.turtles.turtles.turtles.turtles[2] = \"turtles\";\n",
+            "json.turtles.turtles.turtles.turtles[3] = {};\n",
+            "json.turtles.turtles.turtles.turtles[3].turtles = {};\n",
+            "json.turtles.turtles.turtles.turtles[3].turtles.turtles = \"turtles\";\n",
+            "json.name = \"leroy\";\n",
+        ),
+    ));
+}

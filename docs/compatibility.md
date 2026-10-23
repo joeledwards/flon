@@ -70,8 +70,12 @@ contract suite.
 
 The disabled Node junk fixture is not treated as an authoritative golden file:
 its input has three string array elements before an object, but its expected
-output places that object at index two. Rust has independent junk-recovery
-fixtures; resolving that legacy mismatch remains a separate task.
+output omits the third string and places that object at index two. The Rust
+`legacy_junk_fixture_preserves_all_array_elements` test ports the full input
+with the corrected expectation: strings at indexes zero through two, then the
+object and its descendants at index three. It checks the convenience API and
+live/confirmed event rendering at every two-chunk split and in one-byte chunks.
+The legacy expectation is rejected; no Rust formatter change was needed.
 
 ## Fixture matrix
 

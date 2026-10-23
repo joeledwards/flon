@@ -31,8 +31,8 @@ implemented/verified work.
 - [x] Preserve first EOF errors and stop formatter writes after failure
 - [x] Port all 20 distinct active Node fixtures and eight Rust extension cases
 - [x] Add recovery, Unicode, precision, writer-failure, and chunk-boundary tests
-- [ ] Review the disabled legacy Node junk fixture's inconsistent array indexes
-      and record its disposition without preserving an incorrect expected result
+- [x] Review the disabled legacy Node junk fixture: preserve all three strings
+      and place the following object at index three; test the corrected output
 - [x] Expose parser candidate-span limits and test their
       interaction with live/confirmed output and recovery
 
