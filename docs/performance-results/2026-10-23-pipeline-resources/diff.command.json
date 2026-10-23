@@ -1,0 +1,6 @@
+[
+  "git",
+  "diff",
+  "HEAD",
+  "--binary"
+]

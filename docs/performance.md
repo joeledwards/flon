@@ -250,3 +250,13 @@ remains live timing only. Compare rates with the retained unbuffered results,
 but note the input-size difference; precise before/after claims require running
 the same fixture size and parameters on both implementations. No speedup is
 claimed before developer-run measurements.
+
+## Bounded pipeline heap probe
+
+See [resource validation](resources.md) for the developer-run depth, active-key,
+scalar and repeated-candidate campaign, allocation metrics and explicit limits.
+Tool preparation and isolated unit success do not complete the measurement gate.
+
+The developer deferred the legacy output comparison for 1.0. It is not a
+release blocker; no Node/Rust equivalent-work speedup is claimed. See
+[comparison status](legacy-comparison.md).

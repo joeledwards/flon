@@ -1,0 +1,22 @@
+[package]
+name = "flon"
+version = "1.0.0"
+edition = "2024"
+rust-version = "1.87"
+description = "Stream JSON as flat, grep-friendly assignments"
+license = "ISC"
+repository = "https://github.com/joeledwards/flon"
+readme = "README.md"
+keywords = ["json", "streaming", "flatten", "gron"]
+categories = ["command-line-utilities", "encoding"]
+include = ["examples/**", "src/**", "tests/**", "docs/**", "README.md", "ROADMAP.md", "LICENSE", "example.json", "rust-toolchain.toml"]
+
+[dependencies]
+anstream = "1.0"
+anstyle = "1.0"
+clap = { version = "4.5", features = ["derive"] }
+json-skimmer = "1.0.0"
+tempfile = "3.23"
+
+[dev-dependencies]
+json-volcano = { version = "1.0.0", default-features = false }

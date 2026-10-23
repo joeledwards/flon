@@ -59,19 +59,24 @@ pending validation and publication remain unchecked. See
       recovery, confirmed output, and color
 - [x] Complete compiled-CLI integration tests for input/output, pipes, errors,
       configuration/environment precedence, and output buffering
-- [ ] Validate Node/Rust plain-output equivalence on seeded fixtures before
-      claiming equivalent-work speedups (assignment counts/order, bytes/hashes,
-      and documented number/escape differences)
-- [ ] Benchmark throughput and memory on deep, large-token, and long-lived input,
-      including file-backed confirmed output
-- [ ] For 1.0 and subsequent released versions, complete the [performance checklist](docs/performance.md#per-version-checklist)
-      and append version/build metadata, raw timing artifacts, repeated results,
-      and missing-case reasons to the [results log](docs/performance-results.md)
+- Legacy Node/Rust comparison explicitly deferred by the developer; not a 1.0
+  blocker. Rust contracts govern and no equivalent-work speedup is claimed.
+  See [comparison status](docs/legacy-comparison.md).
+- [x] Record live/confirmed throughput and bounded depth/key/scalar/repeated-
+      candidate heap evidence, including file-backed storage; distinguish
+      bounded repetition from hours-long stability in the results log
+- [x] Review and accept explicit 1.0 performance omissions in the
+      [evidence reconciliation](docs/performance-results.md#10-evidence-reconciliation-and-proposed-omissions);
+      retain the [performance checklist](docs/performance.md#per-version-checklist)
+      for subsequent version measurements and record missing-case reasons
 - [x] Check registry index for an existing package (no `flon` entry at 0.1 preparation; publication confirms availability)
 - [x] Complete licensing files and package metadata
 - [x] Establish and test a minimum supported Rust version (1.87; 92 tests passed)
 - [x] Review public formatter/configuration APIs and document stable defaults
-- [ ] Run final unit, documentation, formatting, lint, and authorized release checks
+- [x] Run final isolated unit/example, documentation, formatting, lint and
+      offline package checks (Rust 1.87; see release guide)
+- [x] Rerun the six compiled CLI acceptance tests after buffered spill;
+      all six passed on Rust 1.87 with explicit developer authorization
 - [x] Update the parser dependency to the published `json-skimmer` 1.0 version
       requirement and verify the publishable package
 - [ ] Publish FLON 1.0.0 after the coordinated parser release

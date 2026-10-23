@@ -1,0 +1,1 @@
+{"depth":8,"key_bytes":16,"scalar_bytes":64,"candidates":1000,"chunk_bytes":65536,"mode":"live","input_bytes":234000,"completed":1000,"invalid":0,"output_bytes":764011,"allocation_calls":8004,"requested_bytes":128792,"peak_live_bytes":656,"retained_after_first":528,"retained_at_end":528,"live_after_drop":0}

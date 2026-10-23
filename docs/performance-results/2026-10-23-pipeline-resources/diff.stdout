@@ -1,0 +1,54 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index 4d31bb2..c5e11e4 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -9,7 +9,7 @@ repository = "https://github.com/joeledwards/flon"
+ readme = "README.md"
+ keywords = ["json", "streaming", "flatten", "gron"]
+ categories = ["command-line-utilities", "encoding"]
+-include = ["src/**", "tests/**", "docs/**", "README.md", "ROADMAP.md", "LICENSE", "example.json", "rust-toolchain.toml"]
++include = ["examples/**", "src/**", "tests/**", "docs/**", "README.md", "ROADMAP.md", "LICENSE", "example.json", "rust-toolchain.toml"]
+ 
+ [dependencies]
+ anstream = "1.0"
+diff --git a/docs/api-stability.md b/docs/api-stability.md
+index 945fccd..89f316a 100644
+--- a/docs/api-stability.md
++++ b/docs/api-stability.md
+@@ -4,7 +4,9 @@ The library exports `Formatter<W>`, Read/Write formatting functions,
+ configuration/policy types, recovery outcomes and default constants. FLON owns
+ rendering, active paths/keys, confirmed storage and styling; it consumes only
+ public json-skimmer events. Repository-owned library and CLI code contain no
+-unsafe code. This is not a transitive-dependency safety audit.
++unsafe code. The development-only resource example uses a System allocator wrapper with
++unsafe delegation for heap accounting; it is separate from library/CLI code.
++This is not a transitive-dependency safety audit.
+ 
+ ## Contracts to preserve
+ 
+diff --git a/docs/performance.md b/docs/performance.md
+index e236fe7..aa2390b 100644
+--- a/docs/performance.md
++++ b/docs/performance.md
+@@ -250,3 +250,9 @@ remains live timing only. Compare rates with the retained unbuffered results,
+ but note the input-size difference; precise before/after claims require running
+ the same fixture size and parameters on both implementations. No speedup is
+ claimed before developer-run measurements.
++
++## Bounded pipeline heap probe
++
++See [resource validation](resources.md) for the developer-run depth, active-key,
++scalar and repeated-candidate campaign, allocation metrics and explicit limits.
++Tool preparation and isolated unit success do not complete the measurement gate.
+diff --git a/docs/test-coverage.md b/docs/test-coverage.md
+index 69d2993..115a044 100644
+--- a/docs/test-coverage.md
++++ b/docs/test-coverage.md
+@@ -11,6 +11,7 @@ policy tests live in `src/output_tests.rs`; summary metrics tests live in
+ | Plain assignments and paths | All 20 distinct active Node fixtures plus eight Rust extensions for scalars, nesting, empty containers, duplicate keys, Unicode/escaped keys, number precision; full disabled legacy junk fixture with corrected three-string/fourth-element indexes across chunk divisions in live/confirmed modes | Reference CLI execution |
+ | Chunk independence | Compatibility corpus in live, memory-backed confirmed, and file-backed confirmed modes; exact-output contract corpus in live/file-backed confirmed modes; every two-chunk split, one-byte chunks, and 16 fixed-seed random partitions per input (1–17 byte chunks, including UTF-8/escape/number boundaries and empty pushes) | Broader malformed-input random partitions |
+ | Recovery | Fatal offset exhaustion under all recovery policies; fail/skip/comment policies, path/index reset, transactional root rollback, invalid UTF-8 discard in file-backed confirmed output | Broader malformed-input corpus |
++| Pipeline heap probe | Development-only example: public parser/formatter modes, chunks, active keys, repeated candidates, scalar-size-independent live heap, allocator growth/drop, malformed/truncated spill cleanup; isolated workspace report validation | Full developer-run campaign pending; [method and limits](resources.md); no RSS or hours-long evidence |
+ | Depth limits | Default 1000, positive CLI values and profile overrides; shared library/CLI fail/skip/comment recovery checks, memory/file-backed discard, live partial output; chunk divisions | Broader deep-path stress tests |
+ | Candidate input limits | Shared public Read-adapter corpus for library/CLI; exact boundaries, Unicode/escapes/numbers, every split and one-byte chunks, fail/skip/comment, live partial output, confirmed memory/spill discard and cleanup, independent output limits, profile/default/size validation, summary rollback | Compiled CLI checks |
+ | Key limits | Exact boundary, overflow error, suppressed scalars/subtrees, validation during skipping | Broader nested chunk combinations |

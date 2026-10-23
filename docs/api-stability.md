@@ -4,7 +4,9 @@ The library exports `Formatter<W>`, Read/Write formatting functions,
 configuration/policy types, recovery outcomes and default constants. FLON owns
 rendering, active paths/keys, confirmed storage and styling; it consumes only
 public json-skimmer events. Repository-owned library and CLI code contain no
-unsafe code. This is not a transitive-dependency safety audit.
+unsafe code. The development-only resource example uses a System allocator wrapper with
+unsafe delegation for heap accounting; it is separate from library/CLI code.
+This is not a transitive-dependency safety audit.
 
 ## Contracts to preserve
 

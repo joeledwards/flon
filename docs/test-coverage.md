@@ -11,6 +11,7 @@ policy tests live in `src/output_tests.rs`; summary metrics tests live in
 | Plain assignments and paths | All 20 distinct active Node fixtures plus eight Rust extensions for scalars, nesting, empty containers, duplicate keys, Unicode/escaped keys, number precision; full disabled legacy junk fixture with corrected three-string/fourth-element indexes across chunk divisions in live/confirmed modes | Reference CLI execution |
 | Chunk independence | Compatibility corpus in live, memory-backed confirmed, and file-backed confirmed modes; exact-output contract corpus in live/file-backed confirmed modes; every two-chunk split, one-byte chunks, and 16 fixed-seed random partitions per input (1–17 byte chunks, including UTF-8/escape/number boundaries and empty pushes) | Broader malformed-input random partitions |
 | Recovery | Fatal offset exhaustion under all recovery policies; fail/skip/comment policies, path/index reset, transactional root rollback, invalid UTF-8 discard in file-backed confirmed output | Broader malformed-input corpus |
+| Pipeline heap probe | Development-only example: public parser/formatter modes, chunks, active keys, repeated candidates, scalar-size-independent live heap, allocator growth/drop, malformed/truncated spill cleanup; isolated workspace report validation | Developer-run 252-case campaign passed; [method and limits](resources.md); no RSS or hours-long evidence |
 | Depth limits | Default 1000, positive CLI values and profile overrides; shared library/CLI fail/skip/comment recovery checks, memory/file-backed discard, live partial output; chunk divisions | Broader deep-path stress tests |
 | Candidate input limits | Shared public Read-adapter corpus for library/CLI; exact boundaries, Unicode/escapes/numbers, every split and one-byte chunks, fail/skip/comment, live partial output, confirmed memory/spill discard and cleanup, independent output limits, profile/default/size validation, summary rollback | Compiled CLI checks |
 | Key limits | Exact boundary, overflow error, suppressed scalars/subtrees, validation during skipping | Broader nested chunk combinations |
@@ -53,3 +54,7 @@ independent smaller correctness fixture without changing mode/storage options.
 These isolated tests do not execute FLON benchmarks. Small-fixture digest
 agreement does not prove large timed-output equivalence; selected large spill
 and storage-boundary evidence remains required.
+
+Final authorized acceptance rerun (2026-10-23): all six compiled CLI tests
+passed on Rust 1.87 after buffered spill and resource-tool additions. The
+current isolated counts are 48 library, 46 binary and four example tests.

@@ -209,3 +209,77 @@ but fixture sizes and dependency provenance differ; no precise matched-workload
 speedup factor is claimed. No new GiB confirmed campaign is required for this
 bounded optimization check. Broader deep/active-key/repeated-candidate evidence
 and legacy comparison remain separate release work.
+
+## 2026-10-23 — bounded pipeline memory validation
+
+Developer ran all 252 measurements successfully: 14 cases, three storage
+policies, two chunk sizes and three repetitions. Agent independently revalidated
+the saved reports without rerunning the campaign. Build: Rust 1.99.1, release,
+registry parser, FLON fabbe99 plus the uncommitted resource example. Sources,
+diff, metadata, binary checksum, per-run commands/stdout/stderr/exit and
+[results.json](performance-results/2026-10-23-pipeline-resources/results.json)
+are retained. See [method and limits](resources.md).
+
+| Case | Live peak requested heap | Low-threshold confirmed peak requested heap |
+| --- | ---: | ---: |
+| Depth 1 / one-byte key | 272 B | 334 B (no spill needed) |
+| Depth 16 / one-byte keys | 1,184 B | 1,726 B (no spill needed) |
+| Depth 128 / one-byte keys | 9,472 B | 75,038 B |
+| Depth 1000 / one-byte keys | 75,584 B | 141,150 B |
+| Eight active 4 KiB keys | 33,296–49,536 B | 98,862–115,102 B |
+| Eight active 64 KiB keys | 1,048,080–1,048,848 B | 1,113,646–1,114,414 B |
+| 64 KiB through 8 MiB scalar | 272 B | 65,862 B |
+
+The 1 MiB confirmed-memory threshold peaked at 1,114,646–1,116,326 B for
+1/8 MiB scalars, consistent with candidate staging plus the fixed spill buffer.
+Allocation capacity/chunk divisions affect peaks, particularly keys and confirmed
+memory output; these numbers are requested heap, not logical key payload alone.
+
+Retained heap after 1/100/1000 successive candidates stayed at 528 B live /
+558 B confirmed. Confirmed peak increased from 1,710 B for one candidate to
+2,030 B for both 100 and 1000; this is a bounded warm-up difference, not retained
+accumulation. Every case had zero measured live bytes after pipeline drop,
+no accounting error or remaining spool files, correct candidate counts and
+matching output byte counts across modes/chunks/repetitions. Counts do not
+establish exact-byte equivalence. Repetition values agree for each configuration.
+
+This completes the planned bounded depth/key/scalar/repeated-candidate heap
+validation. It does not measure RSS, stack, allocator overhead, page cache,
+disk occupancy or throughput, nor hours-long stability. Depth/key extremes
+are tested separately to bound path-expanded output. No blanket 10 GiB or
+hours-long campaign is required for this release; existing large throughput/RSS
+runs and storage contract/error tests complement this bounded evidence. Crash
+cleanup and broader operating-system stress remain gaps; no claim covers them.
+Legacy output comparison and final release checks remain open.
+
+## 1.0 evidence reconciliation and proposed omissions
+
+The entries above are chronological; their historical "still open" lists do
+not supersede later evidence or the developer's legacy-comparison deferral.
+
+| Release concern | Evidence now available | Limit or remaining decision |
+| --- | --- | --- |
+| Live records/large strings and candidate counts | Three-run 250 MiB/1 GiB matrices, timing/RSS, saved metadata and output comparisons | Cache/load uncontrolled; earlier builds identified separately |
+| Buffered confirmed spill | Three-run 16/64 MiB matrices, small-fixture hashes, storage/error unit tests | No final buffered GiB timing; size differences prevent precise speedup claims |
+| Depth and active keys | 252-run bounded pipeline heap campaign | Combined extreme depth/key sizes and stack/RSS not measured |
+| Scalar streaming and repeated candidates | Constant live scalar peak through 8 MiB; stable retention through 1000 candidates; post-drop/spool cleanup | Synthetic repetition is not hours-long stability |
+| Invalid/truncated output and I/O failure | Exact-output/chunk/storage contract corpus, ENOSPC immediate/delayed errors and cleanup tests | No standalone 1 GiB malformed/mixed recovery measurement or crash cleanup |
+| Legacy Node comparison | Explicitly deferred by developer | No equivalence or equivalent-work speedup claim |
+| Generator-only measurement | Historical standalone generator timing captured | No new three-run generator-only campaign; file-input timings exclude generation |
+| Summary overhead | Summary correctness and writer/error unit tests | No isolated repeated overhead measurement; timing claims use no-summary |
+| Memory-only confirmed throughput | Small bounded confirmed-memory correctness/heap checks | No dedicated 100 MiB/512 MiB-threshold throughput result |
+
+Recommendation for developer review: accept the unmeasured generator-only,
+summary-overhead, 100 MiB memory-only and GiB malformed-recovery cases as
+explicit 1.0 omissions. They add performance characterisation beyond the bounded
+contract/storage checks; no throughput, stability or resource guarantee should
+be inferred for those omitted cases. Retain them as future opt-in measurements.
+The same applies to blanket 10 GiB and hours-long stress runs. This is a proposed
+release-scope decision, not a statement that the omitted checks passed or that
+the developer has already accepted all omissions. The performance gate remains
+open until that decision is made.
+
+Developer decision (2026-10-23): the developer explicitly accepted the proposed
+performance omissions above for 1.0. The performance evidence gate is closed
+with these limits, not on the basis that unmeasured cases passed. The authorized
+final compiled CLI acceptance rerun also passed all six tests on Rust 1.87.

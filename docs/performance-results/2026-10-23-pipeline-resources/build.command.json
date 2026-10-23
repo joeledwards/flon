@@ -1,0 +1,10 @@
+[
+  "/home/joel/sandboxed/workspaces/rust-utilities/scripts/with-rust",
+  "/home/joel/sandboxed/workspaces/rust-utilities/.tools/rust/rustup-home/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+  "build",
+  "--offline",
+  "--locked",
+  "--release",
+  "--example",
+  "resources"
+]
