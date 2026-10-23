@@ -83,6 +83,11 @@ The intended precedence is:
 5. `CLICOLOR=0` or `TERM=dumb`.
 6. Destination and terminal capability detection.
 
+Invalid `FLON_COLOR` values (including empty or non-Unicode values) fall
+through to the remaining environment rules. Values are case-insensitive but
+are not whitespace-trimmed. `NO_COLOR` is based on presence, including an empty
+value or `0`.
+
 Within the force-color level, `FORCE_COLOR` is checked before
 `CLICOLOR_FORCE`. Values that are empty or `0` do not force color. `anstream`
 adapts the resolved output choice, but FLON owns this precedence contract

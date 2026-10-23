@@ -355,23 +355,30 @@ fn resolve(cli: &Cli, is_terminal: bool) -> EffectiveConfig {
 }
 
 fn resolve_color(cli: &Cli) -> ColorChoice {
+    resolve_color_with_env(cli, |name| env::var_os(name))
+}
+
+fn resolve_color_with_env(
+    cli: &Cli,
+    lookup: impl Fn(&str) -> Option<std::ffi::OsString>,
+) -> ColorChoice {
     if cli.no_color {
         return ColorChoice::Never;
     }
     if let Some(color) = cli.color {
         return color;
     }
-    if let Some(color) = env::var_os("FLON_COLOR").and_then(|value| parse_color_env(&value)) {
+    if let Some(color) = lookup("FLON_COLOR").and_then(|value| parse_color_env(&value)) {
         return color;
     }
-    if env::var_os("NO_COLOR").is_some() {
+    if lookup("NO_COLOR").is_some() {
         return ColorChoice::Never;
     }
-    if env_requests_color("FORCE_COLOR") || env_requests_color("CLICOLOR_FORCE") {
+    if requests_color(lookup("FORCE_COLOR")) || requests_color(lookup("CLICOLOR_FORCE")) {
         return ColorChoice::Always;
     }
-    if env::var_os("CLICOLOR").is_some_and(|value| value == "0")
-        || env::var_os("TERM").is_some_and(|value| value.eq_ignore_ascii_case("dumb"))
+    if lookup("CLICOLOR").is_some_and(|value| value == "0")
+        || lookup("TERM").is_some_and(|value| value.eq_ignore_ascii_case("dumb"))
     {
         return ColorChoice::Never;
     }
@@ -387,8 +394,8 @@ fn parse_color_env(value: &OsStr) -> Option<ColorChoice> {
     }
 }
 
-fn env_requests_color(name: &str) -> bool {
-    env::var_os(name).is_some_and(|value| !value.is_empty() && value != "0")
+fn requests_color(value: Option<std::ffi::OsString>) -> bool {
+    value.is_some_and(|value| !value.is_empty() && value != "0")
 }
 
 #[cfg(test)]
@@ -913,5 +920,108 @@ mod tests {
         };
         assert_eq!(confirmed.memory_threshold, 4 * 1024 * 1024);
         assert_eq!(confirmed.candidate_limit, Some(2 * 1024 * 1024 * 1024));
+    }
+}
+
+#[cfg(test)]
+mod color_precedence_tests {
+    use super::*;
+
+    #[test]
+    fn color_environment_precedence() {
+        use ColorChoice::{Always, Auto, Never};
+        let cases: &[(&[(&str, &str)], ColorChoice)] = &[
+            (&[], Auto),
+            (&[("TERM", "xterm"), ("CLICOLOR", "1")], Auto),
+            (&[("TERM", "DuMb")], Never),
+            (&[("CLICOLOR", "0")], Never),
+            (&[("CLICOLOR", "")], Auto),
+            (&[("NO_COLOR", "")], Never),
+            (&[("NO_COLOR", "0"), ("FORCE_COLOR", "1")], Never),
+            (&[("NO_COLOR", "1"), ("CLICOLOR_FORCE", "1")], Never),
+            (&[("FORCE_COLOR", ""), ("CLICOLOR_FORCE", "0")], Auto),
+            (&[("FORCE_COLOR", "0"), ("CLICOLOR_FORCE", "")], Auto),
+            (&[("FORCE_COLOR", "0"), ("CLICOLOR_FORCE", "1")], Always),
+            (&[("FORCE_COLOR", "3"), ("CLICOLOR_FORCE", "0")], Always),
+            (
+                &[("FORCE_COLOR", "1"), ("TERM", "dumb"), ("CLICOLOR", "0")],
+                Always,
+            ),
+            (
+                &[("CLICOLOR_FORCE", "1"), ("TERM", "dumb"), ("CLICOLOR", "0")],
+                Always,
+            ),
+            (
+                &[
+                    ("FLON_COLOR", "auto"),
+                    ("NO_COLOR", ""),
+                    ("FORCE_COLOR", "1"),
+                    ("TERM", "dumb"),
+                ],
+                Auto,
+            ),
+            (&[("FLON_COLOR", "AlWaYs"), ("NO_COLOR", "1")], Always),
+            (&[("FLON_COLOR", "never"), ("FORCE_COLOR", "1")], Never),
+            (&[("FLON_COLOR", "invalid"), ("NO_COLOR", "")], Never),
+            (&[("FLON_COLOR", ""), ("FORCE_COLOR", "1")], Always),
+            (&[("FLON_COLOR", " always ")], Auto),
+        ];
+        for &(environment, expected) in cases {
+            // Every explicit CLI selection wins over every environment case.
+            for (args, explicit) in [
+                (vec!["flon"], None),
+                (vec!["flon", "--color=auto"], Some(Auto)),
+                (vec!["flon", "--color=always"], Some(Always)),
+                (vec!["flon", "--color=never"], Some(Never)),
+                (vec!["flon", "--no-color"], Some(Never)),
+            ] {
+                let cli = Cli::try_parse_from(&args).unwrap();
+                let resolved = resolve_color_with_env(&cli, |name| {
+                    environment
+                        .iter()
+                        .find(|(key, _)| *key == name)
+                        .map(|(_, value)| (*value).into())
+                });
+                assert_eq!(
+                    resolved,
+                    explicit.unwrap_or(expected),
+                    "{args:?}, {environment:?}"
+                );
+                for terminal in [false, true] {
+                    let styled = resolved.stream_choice(terminal) != StreamColorChoice::Never;
+                    assert_eq!(
+                        styled,
+                        match resolved {
+                            Always => true,
+                            Never => false,
+                            Auto => terminal,
+                        }
+                    );
+                }
+            }
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn non_unicode_flon_color_falls_through_and_no_color_uses_presence() {
+        use std::os::unix::ffi::OsStringExt;
+        let cli = Cli::try_parse_from(["flon"]).unwrap();
+        for no_color in [false, true] {
+            let resolved = resolve_color_with_env(&cli, |name| match name {
+                "FLON_COLOR" => Some(std::ffi::OsString::from_vec(vec![0xff])),
+                "NO_COLOR" if no_color => Some(std::ffi::OsString::from_vec(vec![0xff])),
+                "FORCE_COLOR" => Some("1".into()),
+                _ => None,
+            });
+            assert_eq!(
+                resolved,
+                if no_color {
+                    ColorChoice::Never
+                } else {
+                    ColorChoice::Always
+                }
+            );
+        }
     }
 }

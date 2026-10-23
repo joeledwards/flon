@@ -19,7 +19,7 @@ policy tests live in `src/output_tests.rs`; summary metrics tests live in
 | CLI output buffering | Buffered default, immediate/no-buffer/-B selection and conflicts, profile independence, line visibility before next input read, confirmed withholding, multi-line commits, final partial lines, large lines, partial writes and flush failures | Compiled CLI/pipe checks |
 | Writers | Two-byte partial writes; byte budgets; BrokenPipe, PermissionDenied, WriteZero propagation in live and confirmed modes | Actual zero-length write responses |
 | EOF error preservation | Enabled regression; shared library/CLI checks for first-error identity, no writes after failure, all recovery policies, numeric forms, ANSI/plain output, and confirmed limits crossed at EOF in memory/file-backed modes | Broader input I/O failure coverage |
-| Color and CLI configuration | Semantic palette, explicit options, profiles, size parsing; auto/always/never across terminal/redirected destinations; exact confirmed limits and no unnecessary spills for redirected auto | Environment precedence; compiled CLI tests |
+| Color and CLI configuration | Semantic palette, explicit options, profiles, size parsing; auto/always/never across terminal/redirected destinations; exact confirmed limits and no unnecessary spills for redirected auto; table-driven CLI/environment precedence (all explicit choices, FLON_COLOR, NO_COLOR presence, force-color empty/zero values, CLICOLOR/TERM, invalid and non-Unicode values) with isolated lookups and terminal/redirected decisions | Compiled CLI tests |
 
 Run lightweight unit tests from this repository:
 
