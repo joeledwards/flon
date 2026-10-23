@@ -104,9 +104,10 @@ The initial Rust CLI should provide equivalents for the high-value Node flags:
 - buffered versus immediate output (`--buffering`, `--no-buffer`/`-B`); and
 - optional processing summary.
 
-URL input and disabling TLS certificate validation require a deliberate safety
-and dependency decision. If insecure TLS is retained, it must be explicit,
-local to the selected request, and accompanied by a visible warning.
+URL fetching is out of scope for Rust FLON. Use curl, wget, or aqui and pipe
+its output into FLON's stdin. Those tools own HTTP, TLS, authentication,
+redirects, and network errors; Node's `--url`/`-u` and
+`--allow-unknown-certs`/`-U` flags are intentionally not ported.
 
 The Rust CLI is planned to provide parser-event diagnostics for debugging
 malformed and recovered streams. This is an intentional extension rather than

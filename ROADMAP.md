@@ -52,8 +52,7 @@ implemented/verified work.
       by default in `infinite` with `--no-summary` override
 - [x] Expand summaries with byte/throughput, candidate/error, completed-value type
       and depth metrics; color summaries according to the stderr destination
-- [ ] Decide and document whether URL input is in 1.0 scope; if retained,
-      implement it with an explicit TLS policy and appropriate authorized tests
+- [x] Keep URL fetching out of scope; consume curl/wget/aqui output via stdin
 
 ## 1.0.0 — acceptance and release gates
 
@@ -81,7 +80,6 @@ scope/design review. None block 1.0.
 - [ ] Add `--output=events` for event records on stdout
 - [ ] Add `--trace-events` for events/errors on stderr alongside FLON output
 - [ ] Add light/dark/custom palettes and role configuration
-- [ ] Add URL input with an explicit TLS policy if deferred from 1.0
 - [ ] Add other CLI/formatter conveniences as real use identifies a need
 
 ## 2.0 and later — changes requiring a breaking-contract review

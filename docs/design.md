@@ -22,7 +22,7 @@ input bytes
 
 CLI
     |-- argument and environment policy
-    |-- stdin, file, or optional URL source
+    |-- stdin or file source
     |-- output buffering and broken-pipe handling
     `-- timing and diagnostics
 ```
@@ -133,7 +133,11 @@ choose unlimited storage. These limits reset after every top-level object or
 array and never limit cumulative output from the input stream.
 
 At `CandidateEnd`, confirmed output is copied to the destination and its spool
-is deleted. On invalidation, it is deleted without becoming visible. Root
+is deleted, including when the destination fails during the copy. A commit
+failure may leave a prefix at the destination; confirmed output validates the
+candidate, but cannot roll back destination writes. Spool creation failures
+propagate as I/O errors without releasing that candidate. The stream adapter
+stops on these failures and drops candidate storage. On invalidation, it is deleted without becoming visible. Root
 declaration state is transactional as well, so the next valid candidate still
 produces the declaration when an initial candidate was discarded. A malformed
 candidate can therefore be replaced by an error comment while preserving
@@ -197,8 +201,9 @@ still apply their own buffering.
 The CLI must treat a downstream closed pipe as normal successful termination;
 this is essential when output is consumed by tools such as `head` or `grep`.
 
-URL fetching, TLS configuration, terminal styling, and timing are application
-features. They must not affect the core transformation.
+URL fetching and TLS configuration are out of scope: external fetchers pipe
+response bytes into stdin. Terminal styling and timing are application features
+and must not affect the core transformation.
 
 ## Error model
 

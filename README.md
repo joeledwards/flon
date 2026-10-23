@@ -69,6 +69,16 @@ From this repository in the isolated workspace:
 ../../scripts/with-rust cargo run < example.json
 ```
 
+URL fetching belongs to tools such as curl, wget, or aqui. Pipe their output
+into FLON; there is no built-in URL or TLS configuration:
+
+```bash
+curl --fail --silent --show-error https://example.com/data | flon
+```
+
+In shell scripts, use `set -o pipefail` to propagate a fetcher's failure even
+when FLON successfully processes the bytes received.
+
 Live output with invalid candidates treated as errors is the default. Use
 `--help` for the complete configuration surface. Representative modes include:
 

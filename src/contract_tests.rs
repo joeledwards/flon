@@ -188,6 +188,7 @@ fn confirmed_recovery_resets_paths_and_array_indexes() {
     }
 }
 
+#[derive(Debug)]
 struct LimitedWriter {
     bytes: Vec<u8>,
     budget: usize,
@@ -306,4 +307,75 @@ fn stream_adapter_enforces_candidate_limits() {
     crate::stream_test_support::check_candidate_limits(|input, config| {
         format_with_config(input, Vec::new(), config)
     });
+}
+
+#[test]
+fn confirmed_spool_creation_failure_is_terminal_and_releases_no_output() {
+    for policy in [
+        InvalidCandidatePolicy::Fail,
+        InvalidCandidatePolicy::Skip,
+        InvalidCandidatePolicy::SkipWithComment,
+    ] {
+        for threshold in [0, b"json = {};\n".len() as u64] {
+            let spool = tempfile::tempdir().unwrap();
+            let missing = spool.path().join("missing");
+            let mut visible = Vec::new();
+            let error = format_with_config(
+                br#"{"a":1} {"later":true}"#.as_slice(),
+                &mut visible,
+                Config {
+                    invalid_candidate: policy,
+                    output_mode: OutputMode::Confirmed(ConfirmedOutput {
+                        memory_threshold: threshold,
+                        spool_directory: Some(missing.clone()),
+                        ..ConfirmedOutput::default()
+                    }),
+                    ..Config::default()
+                },
+            )
+            .unwrap_err();
+            assert_eq!(error.kind(), io::ErrorKind::NotFound);
+            assert!(visible.is_empty());
+            assert!(!missing.exists());
+            assert_eq!(spool.path().read_dir().unwrap().count(), 0);
+        }
+    }
+}
+
+#[test]
+fn confirmed_commit_failure_preserves_prefix_and_cleans_spool() {
+    let expected = b"json = {};\njson.a = 1;\n";
+    for policy in [
+        InvalidCandidatePolicy::Fail,
+        InvalidCandidatePolicy::Skip,
+        InvalidCandidatePolicy::SkipWithComment,
+    ] {
+        for threshold in [0, 4096] {
+            for budget in [0, 1, expected.len() - 1] {
+                let spool = tempfile::tempdir().unwrap();
+                let mut writer = LimitedWriter {
+                    bytes: Vec::new(),
+                    budget,
+                    error: io::ErrorKind::PermissionDenied,
+                };
+                let error = format_with_config(
+                    br#"{"a":1} {"later":true}"#.as_slice(),
+                    &mut writer,
+                    Config {
+                        invalid_candidate: policy,
+                        output_mode: OutputMode::Confirmed(ConfirmedOutput {
+                            memory_threshold: threshold,
+                            spool_directory: Some(spool.path().to_owned()),
+                            ..ConfirmedOutput::default()
+                        }),
+                        ..Config::default()
+                    },
+                )
+                .unwrap_err();
+                assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
+                assert_eq!(writer.bytes, expected[..budget]);
+                assert_eq!(spool.path().read_dir().unwrap().count(), 0);
+            }
+        }
+    }
 }
