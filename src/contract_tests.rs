@@ -379,3 +379,96 @@ fn confirmed_commit_failure_preserves_prefix_and_cleans_spool() {
         }
     }
 }
+
+#[derive(Debug)]
+struct ZeroAfterBudget {
+    bytes: Vec<u8>,
+    budget: usize,
+    zero_responses: usize,
+    writes_after_zero: usize,
+}
+
+impl Write for ZeroAfterBudget {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        if bytes.is_empty() {
+            return Ok(0);
+        }
+        if self.zero_responses != 0 {
+            self.writes_after_zero += 1;
+        }
+        if self.bytes.len() == self.budget {
+            self.zero_responses += 1;
+            return Ok(0);
+        }
+        let count = bytes.len().min(2).min(self.budget - self.bytes.len());
+        self.bytes.extend_from_slice(&bytes[..count]);
+        Ok(count)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+#[test]
+fn zero_length_destination_writes_are_terminal_and_clean_confirmed_storage() {
+    // Keep a later candidate in the same read to catch writes after failure.
+    // Any subsequent read is also an error in the adapter's stopping behavior.
+    struct OneRead<'a>(Option<&'a [u8]>);
+    impl Read for OneRead<'_> {
+        fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+            let input = self.0.take().expect("read continued after WriteZero");
+            buffer[..input.len()].copy_from_slice(input);
+            Ok(input.len())
+        }
+    }
+
+    let input = br#"{"a":1}{"later":true}"#;
+    let first_candidate_bytes = b"json = {};\njson.a = 1;\n".len();
+    let expected = format(input.as_slice(), Vec::new()).unwrap();
+    for policy in [
+        InvalidCandidatePolicy::Fail,
+        InvalidCandidatePolicy::Skip,
+        InvalidCandidatePolicy::SkipWithComment,
+    ] {
+        for threshold in [None, Some(4096), Some(0)] {
+            for budget in [
+                0,
+                1,
+                first_candidate_bytes - 1,
+                first_candidate_bytes,
+                expected.len() - 1,
+            ] {
+                let spool = tempfile::tempdir().unwrap();
+                let output_mode = threshold.map_or(OutputMode::Live, |memory_threshold| {
+                    OutputMode::Confirmed(ConfirmedOutput {
+                        memory_threshold,
+                        spool_directory: Some(spool.path().to_owned()),
+                        ..ConfirmedOutput::default()
+                    })
+                });
+                let mut writer = ZeroAfterBudget {
+                    bytes: Vec::new(),
+                    budget,
+                    zero_responses: 0,
+                    writes_after_zero: 0,
+                };
+                let error = format_with_config(
+                    OneRead(Some(input)),
+                    &mut writer,
+                    Config {
+                        output_mode,
+                        invalid_candidate: policy,
+                        ..Config::default()
+                    },
+                )
+                .unwrap_err();
+                assert_eq!(error.kind(), io::ErrorKind::WriteZero);
+                assert_eq!(writer.bytes, expected[..budget]);
+                assert_eq!(writer.zero_responses, 1);
+                assert_eq!(writer.writes_after_zero, 0);
+                assert_eq!(spool.path().read_dir().unwrap().count(), 0);
+            }
+        }
+    }
+}
