@@ -1,75 +1,89 @@
-# Roadmap
+# Release roadmap
 
-## Priority follow-up from project review
+## Release sequence and scope
 
-- [x] Validate UTF-8 incrementally in `json-skimmer` so confirmed output never
-      releases candidates containing invalid UTF-8.
-- [x] Add configurable parser nesting limits and expose them through FLON so
-      deeply nested input cannot grow parser and formatter state without bound.
-- [x] Preserve the first formatter or writer error during EOF processing in
-      `format_with_config`; later recovery events must not clear it. Add a
-      regression test for a failing writer and truncated numeric input (`[1`).
-- [x] Resolve automatic color against the output destination before formatting
-      so stripped ANSI bytes do not inflate confirmed-buffer accounting. Add a
-      regression test for redirected output with a candidate size limit.
-- [x] Expand chunk-boundary and invalid-input tests, including UTF-8, nesting
-      limits, EOF recovery, and writer failures, before adding more CLI features.
-- [x] Update the README's implementation status to reflect the existing CLI
-      and color support, and reconcile parser roadmap items with functionality
-      already demonstrated by FLON.
+Target coordinated **1.0.0 releases** with `json-skimmer`: finish both cores,
+publish `json-skimmer` 1.0.0 first, then publish FLON against that dependency.
+There are no calendar deadlines or required interim 0.x releases. Publishing,
+external checks, and integration/e2e execution remain developer-controlled.
 
-## Streaming formatter
+FLON 1.0 provides the agreed Node-compatible core plus the implemented Rust
+streaming/recovery improvements. Parser decoding/path convenience adapters are
+not dependencies or release gates: FLON already consumes raw public events.
+See the [parser release roadmap](../json-skimmer/ROADMAP.md),
+[compatibility contract](docs/compatibility.md), and [coverage matrix](docs/test-coverage.md).
+Update checklists and coverage notes as work lands; checked items represent
+implemented/verified work.
 
-- [x] Library-first formatter accepting `json-skimmer` events
-- [x] Plain FLON output to any `std::io::Write`
-- [x] Streaming scalar strings and numbers without accumulating their contents
-- [x] Active object-key and array-index path tracking
-- [x] Initial compatibility fixtures based on `node-flon`
-- [x] Compile, format, and run the initial test suite
-- [x] Add configurable active-key length limits
-- [x] Define partial-output behavior for invalid speculative candidates
-- [x] Add bounded or explicitly unlimited confirmed-output mode
-- [x] Report structured invalid-candidate recovery outcomes
+## 1.0.0 — formatter and compatibility
+
+- [x] Formatter library consuming only public `json-skimmer` events
+- [x] Ordered plain FLON output to any `Write` destination
+- [x] Active object-key paths and array indexes, including empty containers
+- [x] Stream raw strings/numbers without accumulating scalar contents
+- [x] Preserve JSON escapes, Unicode, and exact number spelling
+- [x] Configurable key limits with error/skip behavior
+- [x] Configurable nesting limits; default 1,000 containers
+- [x] Live output with documented partial-output behavior
+- [x] Confirmed output with bounded memory, private spill files, configurable
+      per-candidate limits, optional unlimited storage, commit/discard cleanup
+- [x] Fail/skip/comment policies and structured recovery outcomes
+- [x] Preserve first EOF errors and stop formatter writes after failure
+- [x] Port all 20 distinct active Node fixtures and eight Rust extension cases
+- [x] Add recovery, Unicode, precision, writer-failure, and chunk-boundary tests
+- [ ] Review the disabled legacy Node junk fixture's inconsistent array indexes
+      and record its disposition without preserving an incorrect expected result
+- [ ] Expose parser candidate-span limits once implemented and test their
+      interaction with live/confirmed output and recovery
+
+## 1.0.0 — CLI and terminal behavior
+
+- [x] Stdin/file input, argument parsing, and help
+- [x] Expose recovery policies, key/depth limits, and confirmed-storage settings
+- [x] Recovery diagnostics on stderr
+- [x] `wraith`/`infinite` profiles and effective-configuration display
+- [x] Closed output pipe treated as successful early termination
+- [x] Semantic styles with `anstyle` and destination adaptation with `anstream`
+- [x] Auto/always/never color, no-color alias, and documented environment policy
+- [x] Resolve destination color before formatting and confirmed-buffer accounting
+- [ ] Add explicit buffered/immediate output selection (distinct from
+      live/confirmed candidate validity); define and test flushing behavior
+- [ ] Add optional elapsed-time summaries on stderr
+- [ ] Decide and document whether URL input is in 1.0 scope; if retained,
+      implement it with an explicit TLS policy and appropriate authorized tests
+
+## 1.0.0 — acceptance and release gates
+
+- [x] README examples for JSON/plain output, library use, stdin/files, profiles,
+      recovery, confirmed output, and color
+- [ ] Complete compiled-CLI integration tests for input/output, pipes, errors,
+      configuration/environment precedence, and output buffering
+- [ ] Benchmark throughput and memory on deep, large-token, and long-lived input,
+      including file-backed confirmed output
+- [ ] Verify package-name availability on crates.io
+- [ ] Complete licensing files and package metadata
+- [ ] Establish and test a minimum supported Rust version
+- [ ] Review public formatter/configuration APIs and document stable defaults
+- [ ] Run final unit, documentation, formatting, lint, and authorized release checks
+- [ ] Update the parser dependency to the published `json-skimmer` 1.0 version
+      requirement and verify the publishable package
+- [ ] Publish FLON 1.0.0 after the coordinated parser release
+
+## 1.x — additive features guided by actual use
+
+Candidates for minor releases; specific minor versions will be assigned after
+scope/design review. None block 1.0.
+
 - [ ] Define a line-delimited JSON parser-event diagnostic format
-- [x] Port all distinct active `node-flon` fixtures (duplicate assertions consolidated)
-- [ ] Review the disabled legacy junk fixture separately; its expected array
-      entries do not match its input
-- [x] Add recovery, Unicode, escaping, precision, and chunk-boundary fixtures
+- [ ] Add `--output=events` for event records on stdout
+- [ ] Add `--trace-events` for events/errors on stderr alongside FLON output
+- [ ] Add light/dark/custom palettes and role configuration
+- [ ] Add URL input with an explicit TLS policy if deferred from 1.0
+- [ ] Add other CLI/formatter conveniences as real use identifies a need
 
-## Command-line application
+## 2.0 and later — changes requiring a breaking-contract review
 
-- [x] Add stdin and file input
-- [ ] Add buffered and immediate output modes
-- [x] Add CLI configuration and help
-- [x] Add `--invalid=fail|skip|comment`
-- [x] Expose key and confirmed-buffer limits through the CLI
-- [x] Report invalid-candidate recovery diagnostics on stderr
-- [ ] Add `--output=events` for parser events instead of FLON assignments
-- [ ] Add `--trace-events` for parser events and errors on stderr
-- [x] Add `wraith` and `infinite` CLI configuration profiles
-- [x] Add effective-configuration display for profiles and overrides
-- [x] Treat a closed output pipe as successful early termination
-- [ ] Add elapsed-time summaries
-- [ ] Decide whether URL input belongs in the initial Rust release
-- [ ] Add URL input and explicit TLS policy if retained
-
-## Terminal presentation
-
-- [x] Use `anstyle` for the semantic FLON palette
-- [x] Use `anstream` for styled output and terminal adaptation
-- [x] Support `--color=auto|always|never`
-- [x] Honor `NO_COLOR` and document environment-variable precedence
-- [x] Support `FORCE_COLOR`, `CLICOLOR`, and `CLICOLOR_FORCE` compatibility
-- [ ] Add light, dark, and custom FLON palette configuration
-
-## Release readiness
-
-- [ ] Verify whether the `flon` package name is available on crates.io
-- [x] Add README examples for library use, stdin, files, profiles, recovery,
-      confirmed output, and color before publishing
-- [x] Show representative JSON input and plain FLON output in the README
-- [ ] Add licensing and complete package metadata
-- [ ] Establish a minimum supported Rust version
-- [ ] Add integration tests for the compiled CLI
-- [ ] Benchmark throughput and memory use on deeply nested and long-lived input
-- [ ] Publish only after the required `json-skimmer` API is available on crates.io
+- [ ] Review any proposal changing established assignment syntax, root/update
+      semantics, defaults, library APIs, or CLI behavior before scheduling
+- [ ] Keep additive features in 1.x where possible; reserve a major release for
+      deliberate incompatible changes with documented migration guidance
