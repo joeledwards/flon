@@ -176,6 +176,14 @@ and redirected files remain plain. Override it explicitly when needed:
 `FLON_COLOR`, `NO_COLOR`, `FORCE_COLOR`, `CLICOLOR`, `CLICOLOR_FORCE`, and
 `TERM=dumb` according to the precedence documented in `docs/color.md`.
 
+## Large JSON fixtures
+
+The companion **json-volcano** library and CLI live in their own sibling project.
+It streams exact-size fixtures with bounded memory, including giant candidates,
+multiple roots, late errors, and truncated input. See the
+[generator guide](docs/json-generator.md) for build commands, options and
+separate FLON timing. The generator is not shipped with FLON.
+
 ## Project documents
 
 - [Design](docs/design.md) describes the streaming architecture and memory
@@ -183,6 +191,9 @@ and redirected files remain plain. Override it explicitly when needed:
 - [Compatibility](docs/compatibility.md) defines the relationship with
   `node-flon` and intentional behavior changes.
 - [Color](docs/color.md) records the terminal styling and configuration policy.
+
+- [Performance and large-content checks](docs/performance.md) describes the per-version release checklist.
+- [Performance results](docs/performance-results.md) retains versioned measurements and baseline comparisons.
 
 - [Test coverage](docs/test-coverage.md) maps behavior to tests and remaining gaps.
 

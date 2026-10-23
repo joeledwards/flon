@@ -1244,3 +1244,6 @@ mod compatibility_tests;
 extern crate self as flon;
 #[cfg(test)]
 mod stream_test_support;
+
+#[cfg(test)]
+mod large_tests;

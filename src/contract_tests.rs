@@ -483,3 +483,78 @@ fn zero_length_destination_writes_are_terminal_and_clean_confirmed_storage() {
         }
     }
 }
+
+#[test]
+fn published_volcano_fixtures_commit_valid_candidates_and_discard_failures() {
+    use json_volcano::{Config as FixtureConfig, Generator, Scenario, Shape};
+    use std::io::Read;
+
+    for scenario in [
+        Scenario::Valid,
+        Scenario::Invalid,
+        Scenario::Mixed,
+        Scenario::Truncated,
+    ] {
+        let candidates = if scenario == Scenario::Truncated {
+            1
+        } else {
+            3
+        };
+        let mut input = Vec::new();
+        Generator::new(FixtureConfig {
+            bytes: 192,
+            candidates,
+            shape: Shape::String,
+            scenario,
+            escape_percent: 30,
+            unicode_percent: 30,
+            ..FixtureConfig::default()
+        })
+        .unwrap()
+        .read_to_end(&mut input)
+        .unwrap();
+        // Independent assignment oracle from each complete valid wire string.
+        // Preserve JSON escapes and UTF-8 exactly as they appear in the fixture.
+        let mut expected = Vec::new();
+        if scenario != Scenario::Truncated {
+            for (index, candidate) in input.chunks(64).enumerate() {
+                if scenario == Scenario::Valid || (scenario == Scenario::Mixed && index % 2 == 0) {
+                    if expected.is_empty() {
+                        expected.extend_from_slice(b"json = [];\n");
+                    }
+                    expected.extend_from_slice(b"json[0] = ");
+                    expected.extend_from_slice(&candidate[1..candidate.len() - 2]);
+                    expected.extend_from_slice(b";\n");
+                }
+            }
+        }
+        for threshold in [0, 4096] {
+            let spool = tempfile::tempdir().unwrap();
+            let config = Config {
+                invalid_candidate: InvalidCandidatePolicy::Skip,
+                output_mode: OutputMode::Confirmed(ConfirmedOutput {
+                    memory_threshold: threshold,
+                    spool_directory: Some(spool.path().to_owned()),
+                    ..ConfirmedOutput::default()
+                }),
+                ..Config::default()
+            };
+            assert_eq!(
+                format_with_config(input.as_slice(), Vec::new(), config.clone()).unwrap(),
+                expected
+            );
+            for split in 0..=input.len() {
+                assert_eq!(
+                    render_chunks(&input, config.clone(), &[split]),
+                    expected,
+                    "{scenario:?}, threshold={threshold}, split={split}"
+                );
+            }
+            assert_eq!(
+                render_chunks(&input, config, &(0..=input.len()).collect::<Vec<_>>()),
+                expected
+            );
+            assert_eq!(spool.path().read_dir().unwrap().count(), 0);
+        }
+    }
+}

@@ -60,8 +60,14 @@ implemented/verified work.
       recovery, confirmed output, and color
 - [ ] Complete compiled-CLI integration tests for input/output, pipes, errors,
       configuration/environment precedence, and output buffering
+- [ ] Validate Node/Rust plain-output equivalence on seeded fixtures before
+      claiming equivalent-work speedups (assignment counts/order, bytes/hashes,
+      and documented number/escape differences)
 - [ ] Benchmark throughput and memory on deep, large-token, and long-lived input,
       including file-backed confirmed output
+- [ ] For every released version, complete the [performance checklist](docs/performance.md#per-version-checklist)
+      and append version/build metadata, raw timing artifacts, repeated results,
+      and missing-case reasons to the [results log](docs/performance-results.md)
 - [ ] Verify package-name availability on crates.io
 - [ ] Complete licensing files and package metadata
 - [ ] Establish and test a minimum supported Rust version
