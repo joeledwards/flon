@@ -300,3 +300,10 @@ fn spilled_truncated_candidate_is_discarded_at_eof() {
     assert_eq!(output, b"json = {};\njson.ok = 1;\n");
     assert_eq!(spool.path().read_dir().unwrap().count(), 0);
 }
+
+#[test]
+fn stream_adapter_enforces_candidate_limits() {
+    crate::stream_test_support::check_candidate_limits(|input, config| {
+        format_with_config(input, Vec::new(), config)
+    });
+}

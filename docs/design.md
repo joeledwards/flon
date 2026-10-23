@@ -274,3 +274,17 @@ resolved against stderr, independently of the stdout formatter. Plain and styled
 summaries share one renderer. Summary writes and flushes propagate errors only
 when processing itself succeeded. Scalar size extremes and spill totals remain
 future additions; they are not inferred from incomplete recovery information.
+
+
+## Candidate input-byte limit
+
+`Config::max_candidate_bytes: Option<NonZeroU64>` applies to both library and CLI
+Read adapters; direct event users configure `Parser::with_limits` themselves.
+`--max-candidate-bytes SIZE|unlimited` accepts the existing binary-size syntax,
+requires positive finite values, and defaults to unlimited across profiles.
+This setting does not change output mode or confirmed storage configuration.
+Counting and forward-only recovery follow the parser's raw candidate-span
+contract. `candidate_limit_exceeded` follows fail/skip/comment policies: live
+output may be partial; confirmed output is discarded and its spill files cleaned
+up. Invalid candidate statistics are excluded from completed structure totals.
+The generated-output limit may still fail before the input-byte limit is reached.

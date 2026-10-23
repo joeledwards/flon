@@ -410,3 +410,31 @@ fn summary_colors_distinguish_labels_numbers_separators_and_failures() {
         assert!(text.contains(&format!("{red}{status}{white}")));
     }
 }
+
+#[test]
+fn candidate_limits_are_reported_without_committing_invalid_structure() {
+    for mode in ["live", "confirmed"] {
+        let mut cfg = config(&[
+            "--max-candidate-bytes",
+            "5",
+            "--invalid",
+            "skip",
+            "--output-mode",
+            mode,
+        ]);
+        cfg.diagnostics = Diagnostics::Quiet;
+        let mut metrics = Metrics::default();
+        write_stream_measured(b"[1,2,3] [4]".as_slice(), Vec::new(), cfg, &mut metrics).unwrap();
+        assert_eq!(
+            (
+                metrics.started,
+                metrics.completed,
+                metrics.invalid,
+                metrics.recovered
+            ),
+            (2, 1, 1, 1)
+        );
+        assert_eq!(metrics.structure.kinds, [0, 1, 0, 1, 0, 0, 0]);
+        assert_eq!(metrics.discarded_bytes > 0, mode == "confirmed");
+    }
+}

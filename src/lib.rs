@@ -2,7 +2,7 @@
 
 use std::fs::File;
 use std::io::{self, Read, Seek, Write};
-use std::num::NonZeroUsize;
+use std::num::{NonZeroU64, NonZeroUsize};
 use std::path::{Path, PathBuf};
 
 use anstyle::{Ansi256Color, AnsiColor, Style};
@@ -78,6 +78,9 @@ pub struct Config {
     /// Maximum open containers in the stream adapters, including the root.
     /// Callers feeding events directly must configure their parser separately.
     pub max_depth: NonZeroUsize,
+    /// Maximum raw input bytes per candidate in stream adapters; `None` is unlimited.
+    /// Direct event consumers must configure their parser separately.
+    pub max_candidate_bytes: Option<NonZeroU64>,
     /// Maximum raw bytes retained for one object key.
     pub max_key_bytes: usize,
     pub key_overflow: KeyOverflowPolicy,
@@ -90,6 +93,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             max_depth: json_skimmer::DEFAULT_MAX_DEPTH,
+            max_candidate_bytes: None,
             max_key_bytes: DEFAULT_MAX_KEY_BYTES,
             key_overflow: KeyOverflowPolicy::Error,
             invalid_candidate: InvalidCandidatePolicy::Fail,
@@ -763,6 +767,7 @@ fn error_kind_name(kind: ErrorKind) -> &'static str {
         ErrorKind::InvalidUnicodeEscape => "invalid_unicode_escape",
         ErrorKind::InvalidUtf8 => "invalid_utf8",
         ErrorKind::DepthLimitExceeded => "depth_limit_exceeded",
+        ErrorKind::CandidateLimitExceeded => "candidate_limit_exceeded",
         ErrorKind::ControlCharacterInString => "control_character_in_string",
         ErrorKind::InvalidNumber => "invalid_number",
         ErrorKind::UnexpectedEnd => "unexpected_end",
@@ -782,7 +787,11 @@ pub fn format_with_config<R: Read, W: Write>(
     output: W,
     config: Config,
 ) -> io::Result<W> {
-    let mut parser = Parser::with_max_depth(json_skimmer::Mode::Scan, config.max_depth);
+    let mut parser = Parser::with_limits(
+        json_skimmer::Mode::Scan,
+        config.max_depth,
+        config.max_candidate_bytes,
+    );
     let mut formatter = Formatter::with_config(output, config);
     let mut buffer = [0_u8; 8 * 1024];
 

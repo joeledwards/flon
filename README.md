@@ -77,7 +77,7 @@ Live output with invalid candidates treated as errors is the default. Use
 ../../scripts/with-rust cargo run -- --profile wraith example.json
 
 # Confirm each candidate, use unlimited file-backed overflow, annotate errors,
-# and report recoveries plus an processing summary on stderr.
+# and report recoveries plus a processing summary on stderr.
 ../../scripts/with-rust cargo run -- --profile infinite example.json
 
 # Bounded confirmed output with explicit binary sizes.
@@ -137,6 +137,19 @@ messages independently of summaries. `--show-config` emits no summary.
 Nesting is limited to 1,000 open containers by default, counting the root as
 depth one. Use `--max-depth N` to select a positive limit. Exceeding it follows
 the selected invalid-candidate policy.
+
+Limit raw input bytes per candidate with `--max-candidate-bytes 10MiB`.
+The default is `unlimited` (also accepted explicitly); finite limits must be
+positive. This works in both live and confirmed modes and does not select an
+output mode. Counting includes the root opening/closing delimiters, internal
+whitespace, raw escapes, and UTF-8 bytes, excluding surrounding text. Exactly
+SIZE bytes are allowed; the first excess byte produces `candidate_limit_exceeded`
+before being parsed and follows `--invalid=fail|skip|comment`. Recovery consumes
+that byte and scans from the next one, so later nested openers may become new
+candidates. At EOF, an unfinished candidate within the limit keeps its ordinary
+EOF error. The limit resets for each candidate; it is independent of the
+`--confirmed-limit` generated-output bound. Library stream adapters expose it as
+`Config::max_candidate_bytes`; direct event consumers configure their parser.
 
 Explicit options override profile defaults. `--show-config` prints the resolved
 configuration without processing input.

@@ -33,7 +33,7 @@ implemented/verified work.
 - [x] Add recovery, Unicode, precision, writer-failure, and chunk-boundary tests
 - [ ] Review the disabled legacy Node junk fixture's inconsistent array indexes
       and record its disposition without preserving an incorrect expected result
-- [ ] Expose parser candidate-span limits once implemented and test their
+- [x] Expose parser candidate-span limits and test their
       interaction with live/confirmed output and recovery
 
 ## 1.0.0 — CLI and terminal behavior

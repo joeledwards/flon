@@ -2,7 +2,7 @@ use std::env;
 use std::ffi::OsStr;
 use std::fs::File;
 use std::io::{self, IsTerminal, Read, Write};
-use std::num::NonZeroUsize;
+use std::num::{NonZeroU64, NonZeroUsize};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -47,6 +47,10 @@ struct Cli {
     /// Maximum open containers, including the root (default: 1000; must be positive).
     #[arg(long)]
     max_depth: Option<NonZeroUsize>,
+
+    /// Maximum raw input bytes per candidate, or 'unlimited' (default).
+    #[arg(long, value_parser = parse_candidate_limit)]
+    max_candidate_bytes: Option<ConfirmedLimit>,
 
     /// Action to take when an object key exceeds its byte limit.
     #[arg(long, value_enum)]
@@ -277,6 +281,12 @@ fn resolve(cli: &Cli, is_terminal: bool) -> EffectiveConfig {
     if let Some(maximum) = cli.max_key_bytes {
         formatter.max_key_bytes = usize::try_from(maximum).unwrap_or(usize::MAX);
     }
+    if let Some(limit) = cli.max_candidate_bytes {
+        formatter.max_candidate_bytes = match limit {
+            ConfirmedLimit::Bytes(bytes) => NonZeroU64::new(bytes),
+            ConfirmedLimit::Unlimited => None,
+        };
+    }
     if let Some(maximum) = cli.max_depth {
         formatter.max_depth = maximum;
     }
@@ -396,8 +406,11 @@ fn format_stream_measured<R: Read, W: Write>(
     effective: EffectiveConfig,
     metrics: &mut summary::Metrics,
 ) -> io::Result<W> {
-    let mut parser =
-        Parser::with_max_depth(json_skimmer::Mode::Scan, effective.formatter.max_depth);
+    let mut parser = Parser::with_limits(
+        json_skimmer::Mode::Scan,
+        effective.formatter.max_depth,
+        effective.formatter.max_candidate_bytes,
+    );
     let mut formatter = Formatter::with_config(output, effective.formatter);
     let mut buffer = [0_u8; 8 * 1024];
 
@@ -481,6 +494,14 @@ fn report_recovery(recovery: &Recovery, diagnostics: Diagnostics) {
         "flon: discarded {} confirmed-output bytes{storage}; {:?} at byte {}; scanning for next candidate",
         recovery.discarded_output_bytes, recovery.error.kind, recovery.error.offset
     );
+}
+
+fn parse_candidate_limit(value: &str) -> Result<ConfirmedLimit, String> {
+    let limit = parse_limit(value)?;
+    if limit == ConfirmedLimit::Bytes(0) {
+        return Err("candidate byte limit must be positive or unlimited".into());
+    }
+    Ok(limit)
 }
 
 fn parse_limit(value: &str) -> Result<ConfirmedLimit, String> {
@@ -654,6 +675,68 @@ mod tests {
                 },
             )
         });
+    }
+
+    #[test]
+    fn stream_adapter_enforces_candidate_limits() {
+        crate::stream_test_support::check_candidate_limits(|input, formatter| {
+            format_stream(
+                input,
+                Vec::new(),
+                EffectiveConfig {
+                    formatter,
+                    diagnostics: Diagnostics::Quiet,
+                    color: ColorChoice::Never,
+                    buffering: Buffering::Buffered,
+                    summary: false,
+                },
+            )
+        });
+    }
+
+    #[test]
+    fn candidate_limit_options_preserve_defaults_and_profile_output_modes() {
+        assert!(resolve(&cli(&[])).formatter.max_candidate_bytes.is_none());
+        for profile in ["wraith", "infinite"] {
+            assert!(
+                resolve(&cli(&["--profile", profile]))
+                    .formatter
+                    .max_candidate_bytes
+                    .is_none()
+            );
+            let limited = resolve(&cli(&[
+                "--profile",
+                profile,
+                "--max-candidate-bytes",
+                "2KiB",
+            ]));
+            assert_eq!(limited.formatter.max_candidate_bytes.unwrap().get(), 2048);
+            assert_eq!(
+                matches!(limited.formatter.output_mode, OutputMode::Confirmed(_)),
+                profile == "infinite"
+            );
+            assert!(
+                resolve(&cli(&[
+                    "--profile",
+                    profile,
+                    "--max-candidate-bytes",
+                    "unlimited"
+                ]))
+                .formatter
+                .max_candidate_bytes
+                .is_none()
+            );
+        }
+        for value in [
+            "0",
+            "0KiB",
+            "-1",
+            "garbage",
+            "18446744073709551616",
+            "18446744073709551615GiB",
+        ] {
+            assert!(Cli::try_parse_from(["flon", "--max-candidate-bytes", value]).is_err());
+        }
     }
 
     #[test]

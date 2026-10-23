@@ -205,3 +205,129 @@ pub(crate) fn check_eof_policies(mut run: impl FnMut(&[u8], Config) -> io::Resul
         }
     }
 }
+
+/// Exercise both public Read adapters with identical byte-limit contracts.
+pub(crate) fn check_candidate_limits(
+    mut run: impl FnMut(&mut dyn std::io::Read, Config) -> io::Result<Vec<u8>>,
+) {
+    struct Chunks<'a> {
+        bytes: &'a [u8],
+        first: usize,
+        rest: usize,
+    }
+    impl std::io::Read for Chunks<'_> {
+        fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+            let maximum = if self.first > 0 {
+                std::mem::take(&mut self.first)
+            } else {
+                self.rest
+            };
+            let count = self.bytes.len().min(buffer.len()).min(maximum);
+            buffer[..count].copy_from_slice(&self.bytes[..count]);
+            self.bytes = &self.bytes[count..];
+            Ok(count)
+        }
+    }
+    for confirmed in [false, true] {
+        for memory in [0, 4096] {
+            let spool = tempfile::tempdir().unwrap();
+            let base = Config {
+                output_mode: if confirmed {
+                    OutputMode::Confirmed(ConfirmedOutput {
+                        memory_threshold: memory,
+                        spool_directory: Some(spool.path().to_owned()),
+                        ..ConfirmedOutput::default()
+                    })
+                } else {
+                    OutputMode::Live
+                },
+                ..Config::default()
+            };
+            for input in [
+                b"[]".as_slice(),
+                b"[0]",
+                b"[ ]",
+                "{\"雪\":\"😀\"}".as_bytes(),
+                br#"["\u1234",1e+2]"#,
+            ] {
+                let expected = run(&mut &input[..], base.clone()).unwrap();
+                for maximum in [input.len() as u64, input.len() as u64 + 1] {
+                    let mut cfg = base.clone();
+                    cfg.max_candidate_bytes = std::num::NonZeroU64::new(maximum);
+                    for split in 1..=input.len() {
+                        for rest in [1, input.len()] {
+                            assert_eq!(
+                                run(
+                                    &mut Chunks {
+                                        bytes: input,
+                                        first: split,
+                                        rest
+                                    },
+                                    cfg.clone()
+                                )
+                                .unwrap(),
+                                expected
+                            );
+                        }
+                    }
+                }
+            }
+            let input = b"[1,2,3] [4]";
+            for policy in [
+                InvalidCandidatePolicy::Fail,
+                InvalidCandidatePolicy::Skip,
+                InvalidCandidatePolicy::SkipWithComment,
+            ] {
+                let mut cfg = base.clone();
+                cfg.max_candidate_bytes = std::num::NonZeroU64::new(5);
+                cfg.invalid_candidate = policy;
+                for split in 1..=input.len() {
+                    for rest in [1, input.len()] {
+                        let result = run(
+                            &mut Chunks {
+                                bytes: input,
+                                first: split,
+                                rest,
+                            },
+                            cfg.clone(),
+                        );
+                        if policy == InvalidCandidatePolicy::Fail {
+                            let error = result.unwrap_err();
+                            assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+                            assert_eq!(
+                                error.to_string(),
+                                "invalid JSON candidate: candidate_limit_exceeded at byte 5 (candidate start: 0)"
+                            );
+                        } else {
+                            let mut expected = Vec::new();
+                            if !confirmed {
+                                expected
+                                    .extend_from_slice(b"json = [];\njson[0] = 1;\njson[1] = 2;\n");
+                            }
+                            if policy == InvalidCandidatePolicy::SkipWithComment {
+                                expected.extend_from_slice(b"/* flon-error kind=candidate_limit_exceeded offset=5 candidate_start=0 */\n");
+                            }
+                            if confirmed {
+                                expected.extend_from_slice(b"json = [];\n");
+                            }
+                            expected.extend_from_slice(b"json[0] = 4;\n");
+                            assert_eq!(result.unwrap(), expected);
+                        }
+                        assert_eq!(spool.path().read_dir().unwrap().count(), 0);
+                    }
+                }
+            }
+            if confirmed {
+                let mut cfg = base.clone();
+                cfg.max_candidate_bytes = std::num::NonZeroU64::new(2);
+                if let OutputMode::Confirmed(storage) = &mut cfg.output_mode {
+                    storage.candidate_limit = Some(1);
+                }
+                assert_eq!(
+                    run(&mut b"[]".as_slice(), cfg).unwrap_err().kind(),
+                    io::ErrorKind::OutOfMemory
+                );
+            }
+        }
+    }
+}
