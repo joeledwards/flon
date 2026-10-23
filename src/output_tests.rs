@@ -42,6 +42,7 @@ fn effective(buffering: Buffering, output_mode: OutputMode) -> EffectiveConfig {
         color: ColorChoice::Never,
         buffering,
         summary: false,
+        summary_format: crate::summary::SummaryFormat::Text,
     }
 }
 

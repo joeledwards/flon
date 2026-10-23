@@ -120,6 +120,30 @@ Use `--summary` (or `-v`) to report processing metrics on stderr:
 ../../scripts/with-rust cargo run -- --profile infinite --no-summary example.json
 ```
 
+Choose `--summary-format text|json|flon`; selecting a format enables the summary
+and conflicts with `--no-summary`. Text is the default for `--summary`, `-v`
+and the infinite profile. For example:
+
+```bash
+flon --summary-format json --diagnostics quiet example.json 2> summary.json
+flon --summary-format flon --diagnostics quiet example.json 2> summary.flon
+```
+
+Text prints one metric per line, human-readable quantities followed by literal
+values in parentheses. Small counts are already literal and appear once. Bytes
+use binary units (KiB/MiB/GiB); large counts use decimal k/M/G suffixes. Rounded
+human quantities have two decimal places. Blank lines separate the block from
+surrounding output; an `=` header and `-` footer match its widest visible line,
+ignoring ANSI colors. Very large literal values can produce wide lines; the
+block is not clipped to the terminal width.
+
+JSON emits one object on one line; FLON emits assignments rooted at `summary`.
+Both always use plain, unrounded numeric literals, even with `--color always`.
+Field meanings and types are documented in [summary formats](docs/summary.md).
+Recovery diagnostics and terminal error messages still share stderr; `--diagnostics=quiet` suppresses recovery diagnostics, but failed runs can append a terminal
+error after the structured summary. These examples produce a standalone summary
+file only when there are no other stderr messages.
+
 A summary includes elapsed time, input bytes and throughput, output bytes,
 candidates started/completed/invalid/recovered, errors, value counts by JSON
 type, object-key counts, maximum value depth, and a depth histogram (0–4,
@@ -140,7 +164,7 @@ The recovery line reports discarded confirmed-output bytes.
 Timing covers input opening through final output flushing using a monotonic
 clock. Throughput is input bytes divided by that time. Failed runs and closed
 pipes report `failed` and `pipe closed`; stdout remains assignment-only.
-Summary colors follow the resolved color policy, with automatic color determined
+Text summary colors follow the resolved color policy, with automatic color determined
 from **stderr**, independently of stdout. `--diagnostics=quiet` controls recovery
 messages independently of summaries. `--show-config` emits no summary.
 

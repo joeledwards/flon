@@ -75,6 +75,45 @@ giant strings, many candidates, malformed recovery, and 10 GiB runs. Earlier
 ~15 MiB results from the legacy generated/hash-sink harness are a different
 workload and must not be combined with this table.
 
+## 2026-10-23 — 1.0.0 live file-input baseline
+
+Developer-run via workspace `scripts/measure-flon-baseline`; all build,
+generation and measurement exit statuses were zero. [Raw artifacts and metadata](performance-results/2026-10-23-1.0.0-1cd5d96-live-baseline/metadata.txt)
+are retained alongside commands, timings, executable/input SHA-256 hashes,
+manifests and lockfile; the generated 100 MiB fixture is excluded.
+
+FLON revision `1cd5d96790d9ce678e69404abacf155fae5da205`, local parser
+`a9f573738ed17c4c2859b69f26f7d95ebadabca8`; both working trees were clean.
+Offline locked release build, Rust 1.99.1 / LLVM 23.1.1, x86_64 Linux.
+Host hulk: Ryzen 9 5950X, 121 GiB reported RAM, kernel 7.0.0-34-generic,
+ext4 on /dev/nvme0n1p2. Input was freshly generated; cache was not flushed,
+background load uncontrolled. Cargo configuration and all effective compiler
+flags were not exhaustively captured; caller environment and build log are saved.
+
+Published json-volcano 1.0.0, corpus 1, seed 42, records shape, one valid
+candidate, depth 1, escape/unicode probabilities 2 percent each. Input size
+104,857,600 bytes. Generator reported 0.234767 seconds / 425.955 MiB/s;
+its separate GNU time result is retained. FLON read the completed file with
+live output, color never, summaries disabled and stdout sent to /dev/null.
+
+| Run | Wall seconds | Input MiB/s | Peak RSS (KiB) | Exit |
+| --- | ---: | ---: | ---: | ---: |
+| 1 | 1.69 | 59.17 | 3688 | 0 |
+| 2 | 1.65 | 60.61 | 3824 | 0 |
+| 3 | 1.66 | 60.24 | 3696 | 0 |
+
+Median wall time **1.66 s** (min/max 1.65–1.69); median input throughput
+**60.24 MiB/s** (59.17–60.61); median peak RSS **3696 KiB**
+(range 3688–3824 KiB). GNU time wall measurements have hundredth-second
+precision. No output correctness/hash comparison was performed by this script.
+This file-input result is not directly comparable with the earlier pipeline
+measurements and establishes no Node/Rust equivalent-work speedup.
+
+Release gate remains open: 1/10 GiB, giant strings, many candidates, deep and
+long-lived streams, parser allocation/RSS evidence, memory-only/forced-spill
+confirmed output, malformed recovery/cleanup, summary overhead, legacy workload,
+and Node/Rust equivalence remain to record.
+
 ## Entry template
 
 Copy this section for each version/build:

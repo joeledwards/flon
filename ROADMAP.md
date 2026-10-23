@@ -49,6 +49,8 @@ pending validation and publication remain unchecked. See
       by default in `infinite` with `--no-summary` override
 - [x] Expand summaries with byte/throughput, candidate/error, completed-value type
       and depth metrics; color summaries according to the stderr destination
+- [x] Add text/JSON/FLON summary formats; readable one-metric-per-line text,
+      exact literals, and separators sized independently of ANSI styling
 - [x] Keep URL fetching out of scope; consume curl/wget/aqui output via stdin
 
 ## 1.0.0 — acceptance and release gates

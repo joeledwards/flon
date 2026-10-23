@@ -107,17 +107,34 @@ impl<W: Write> Write for CountWriter<'_, W> {
     }
 }
 
+/// Machine formats always use unstyled literal values.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, clap::ValueEnum)]
+pub(super) enum SummaryFormat {
+    #[default]
+    Text,
+    Json,
+    Flon,
+}
+
 pub(super) fn run(
     enabled: bool,
     mut diagnostics: impl Write,
     styled: bool,
+    format: SummaryFormat,
     work: impl FnOnce(&mut Metrics) -> io::Result<()>,
 ) -> io::Result<()> {
     let start = enabled.then(Instant::now);
     let mut metrics = Metrics::default();
     let result = work(&mut metrics);
     if let Some(start) = start {
-        let summary = write_summary(&mut diagnostics, start.elapsed(), &result, &metrics, styled);
+        let summary = write_formatted_summary(
+            &mut diagnostics,
+            start.elapsed(),
+            &result,
+            &metrics,
+            styled,
+            format,
+        );
         if result.is_ok() {
             summary?;
         }
@@ -125,159 +142,255 @@ pub(super) fn run(
     result
 }
 
+#[cfg(test)]
 fn write_summary(
+    output: impl Write,
+    elapsed: Duration,
+    result: &io::Result<()>,
+    metrics: &Metrics,
+    styled: bool,
+) -> io::Result<()> {
+    write_formatted_summary(
+        output,
+        elapsed,
+        result,
+        metrics,
+        styled,
+        SummaryFormat::Text,
+    )
+}
+
+// Human quantities are approximate; literal integer fields never pass through f64.
+fn quantity(value: f64, units: &[&str], base: f64) -> String {
+    let mut scaled = value;
+    let mut unit = 0;
+    while scaled >= base && unit + 1 < units.len() {
+        scaled /= base;
+        unit += 1;
+    }
+    format!("{scaled:.2} {}", units[unit]).trim_end().to_owned()
+}
+
+struct Field {
+    name: &'static str,
+    label: &'static str,
+    literal: String,
+    readable: String,
+}
+
+fn write_formatted_summary(
     mut output: impl Write,
     elapsed: Duration,
     result: &io::Result<()>,
     metrics: &Metrics,
     styled: bool,
+    format: SummaryFormat,
 ) -> io::Result<()> {
     let status = match result {
         Ok(()) => "completed",
         Err(error) if error.kind() == io::ErrorKind::BrokenPipe => "pipe closed",
         Err(_) => "failed",
     };
-    let blue = anstyle::AnsiColor::Blue.on_default();
-    let orange = anstyle::Ansi256Color(208).on_default();
-    let white = anstyle::AnsiColor::White.on_default();
-    let red = anstyle::AnsiColor::Red.on_default();
-    macro_rules! key {
-        ($value:expr) => {
-            SummaryToken {
-                value: $value,
-                style: blue,
-                styled,
-            }
-        };
-    }
-    macro_rules! number {
-        ($value:expr) => {
-            SummaryToken {
-                value: $value,
-                style: orange,
-                styled,
-            }
-        };
-    }
-    if styled {
-        write!(output, "{white}")?;
-    }
-    let status = SummaryToken {
-        value: status,
-        style: if result.is_err() { red } else { white },
-        styled,
+    let mut fields = Vec::new();
+    let mut add = |name, label, literal: String, readable| {
+        fields.push(Field {
+            name,
+            label,
+            literal,
+            readable,
+        });
     };
-    writeln!(
-        output,
-        "{}: {status} in {}s",
-        key!("flon"),
-        number!(format_args!("{:.3}", elapsed.as_secs_f64()))
-    )?;
+    let seconds = elapsed.as_secs_f64();
+    let duration = if seconds < 1.0 {
+        quantity(seconds * 1e9, &["ns", "µs", "ms", "s"], 1000.0)
+    } else if seconds < 60.0 {
+        format!("{seconds:.2} s")
+    } else if seconds < 3600.0 {
+        format!("{:.2} min", seconds / 60.0)
+    } else {
+        format!("{:.2} h", seconds / 3600.0)
+    };
+    add(
+        "elapsed_ns",
+        "elapsed",
+        elapsed.as_nanos().to_string(),
+        format!("{duration} ({} ns)", elapsed.as_nanos()),
+    );
+    let bytes = |value: u64| {
+        format!(
+            "{} ({value} bytes)",
+            quantity(
+                value as f64,
+                &["B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB"],
+                1024.0
+            )
+        )
+    };
+    add(
+        "input_bytes",
+        "input",
+        metrics.input_bytes.to_string(),
+        bytes(metrics.input_bytes),
+    );
+    add(
+        "output_bytes",
+        "output",
+        metrics.output_bytes.to_string(),
+        bytes(metrics.output_bytes),
+    );
     let rate = if elapsed.is_zero() {
         0.0
     } else {
-        metrics.input_bytes as f64 / elapsed.as_secs_f64()
+        metrics.input_bytes as f64 / seconds
     };
-    writeln!(
-        output,
-        "  {}: {} bytes ({} bytes/s)",
-        key!("input"),
-        number!(metrics.input_bytes),
-        number!(format_args!("{rate:.0}"))
-    )?;
-    writeln!(
-        output,
-        "  {}: {} bytes",
-        key!("output"),
-        number!(metrics.output_bytes)
-    )?;
-    writeln!(
-        output,
-        "  {}: {} {}, {} {}, {} {}, {} {}",
-        key!("candidates"),
-        number!(metrics.started),
-        key!("started"),
-        number!(metrics.completed),
-        key!("completed"),
-        number!(metrics.invalid),
-        key!("invalid"),
-        number!(metrics.recovered),
-        key!("recovered")
-    )?;
-    writeln!(
-        output,
-        "  {}: {} ({} {}, {} {})",
-        key!("errors"),
-        number!(metrics.recovered.saturating_add(u64::from(result.is_err()))),
-        number!(metrics.recovered),
-        key!("recovered"),
-        number!(u8::from(result.is_err())),
-        key!("terminal")
-    )?;
+    add(
+        "input_bytes_per_second",
+        "input throughput",
+        rate.to_string(),
+        format!(
+            "{}/s ({rate} bytes/s)",
+            quantity(
+                rate,
+                &["B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB"],
+                1024.0
+            )
+        ),
+    );
     let s = &metrics.structure;
     let total = s.kinds[..6]
         .iter()
         .copied()
         .fold(0_u64, u64::saturating_add);
-    writeln!(
-        output,
-        "  {}: {} (completed candidates)",
-        key!("values"),
-        number!(total)
-    )?;
-    writeln!(
-        output,
-        "    {}: {}  {}: {}  {}: {}",
-        key!("objects"),
-        number!(s.kinds[0]),
-        key!("arrays"),
-        number!(s.kinds[1]),
-        key!("strings"),
-        number!(s.kinds[2])
-    )?;
-    writeln!(
-        output,
-        "    {}: {}  {}: {}  {}: {}  {}: {}",
-        key!("numbers"),
-        number!(s.kinds[3]),
-        key!("booleans"),
-        number!(s.kinds[4]),
-        key!("nulls"),
-        number!(s.kinds[5]),
-        key!("keys"),
-        number!(s.kinds[6])
-    )?;
-    writeln!(
-        output,
-        "  {}: {} {}",
-        key!("depth"),
-        key!("max"),
-        number!(s.max_depth)
-    )?;
-    writeln!(
-        output,
-        "    {}: {}  {}: {}  {}: {}  {}: {}  {}: {}  {}: {}",
-        key!("0"),
-        number!(s.depths[0]),
-        key!("1"),
-        number!(s.depths[1]),
-        key!("2"),
-        number!(s.depths[2]),
-        key!("3"),
-        number!(s.depths[3]),
-        key!("4"),
-        number!(s.depths[4]),
-        key!("5+"),
-        number!(s.depths[5])
-    )?;
-    writeln!(
-        output,
-        "  {}: {} confirmed-output bytes discarded",
-        key!("recovery"),
-        number!(metrics.discarded_bytes)
-    )?;
-    if styled {
-        write!(output, "{white:#}")?;
+    for (name, label, value) in [
+        ("candidates_started", "candidates started", metrics.started),
+        (
+            "candidates_completed",
+            "candidates completed",
+            metrics.completed,
+        ),
+        ("candidates_invalid", "candidates invalid", metrics.invalid),
+        (
+            "candidates_recovered",
+            "candidates recovered",
+            metrics.recovered,
+        ),
+        (
+            "errors",
+            "errors",
+            metrics.recovered.saturating_add(u64::from(result.is_err())),
+        ),
+        ("errors_recovered", "errors recovered", metrics.recovered),
+        (
+            "errors_terminal",
+            "errors terminal",
+            u64::from(result.is_err()),
+        ),
+        ("values", "values (completed candidates)", total),
+        ("objects", "objects", s.kinds[0]),
+        ("arrays", "arrays", s.kinds[1]),
+        ("strings", "strings", s.kinds[2]),
+        ("numbers", "numbers", s.kinds[3]),
+        ("booleans", "booleans", s.kinds[4]),
+        ("nulls", "nulls", s.kinds[5]),
+        ("keys", "keys", s.kinds[6]),
+        ("max_depth", "maximum value depth", s.max_depth),
+        ("depth_0", "values at depth 0", s.depths[0]),
+        ("depth_1", "values at depth 1", s.depths[1]),
+        ("depth_2", "values at depth 2", s.depths[2]),
+        ("depth_3", "values at depth 3", s.depths[3]),
+        ("depth_4", "values at depth 4", s.depths[4]),
+        ("depth_5_plus", "values at depth 5+", s.depths[5]),
+    ] {
+        let readable = if value < 1000 {
+            value.to_string()
+        } else {
+            format!(
+                "{} ({value})",
+                quantity(value as f64, &["", "k", "M", "G", "T", "P", "E"], 1000.0)
+            )
+        };
+        add(name, label, value.to_string(), readable);
+    }
+    add(
+        "discarded_bytes",
+        "confirmed output discarded",
+        metrics.discarded_bytes.to_string(),
+        bytes(metrics.discarded_bytes),
+    );
+
+    match format {
+        SummaryFormat::Json => {
+            // Status is one of three fixed ASCII strings; keys are fixed identifiers.
+            write!(output, "{{\"status\":\"{status}\"")?;
+            for field in &fields {
+                write!(output, ",\"{}\":{}", field.name, field.literal)?;
+            }
+            writeln!(output, "}}")?;
+        }
+        SummaryFormat::Flon => {
+            writeln!(output, "summary = {{}};\nsummary.status = \"{status}\";")?;
+            for field in &fields {
+                writeln!(output, "summary.{} = {};", field.name, field.literal)?;
+            }
+        }
+        SummaryFormat::Text => {
+            let title = "FLON processing summary";
+            // All labels are ASCII; µ is a single visible column. No ANSI bytes
+            // participate in this calculation.
+            let width = fields
+                .iter()
+                .map(|field| field.label.chars().count() + 2 + field.readable.chars().count())
+                .chain([title.len(), "status: ".len() + status.len()])
+                .max()
+                .unwrap();
+            let white = anstyle::AnsiColor::White.on_default();
+            if styled {
+                write!(output, "{white}")?;
+            }
+            writeln!(output, "\n{}\n{title}", "=".repeat(width))?;
+            let label_style = anstyle::AnsiColor::Blue.on_default();
+            let number_style = anstyle::Ansi256Color(208).on_default();
+            let status_style = if result.is_err() {
+                anstyle::AnsiColor::Red.on_default()
+            } else {
+                white
+            };
+            writeln!(
+                output,
+                "{}: {}",
+                SummaryToken {
+                    value: "status",
+                    style: label_style,
+                    styled
+                },
+                SummaryToken {
+                    value: status,
+                    style: status_style,
+                    styled
+                }
+            )?;
+            for field in &fields {
+                writeln!(
+                    output,
+                    "{}: {}",
+                    SummaryToken {
+                        value: field.label,
+                        style: label_style,
+                        styled
+                    },
+                    SummaryToken {
+                        value: &field.readable,
+                        style: number_style,
+                        styled
+                    }
+                )?;
+            }
+            writeln!(output, "{}", "-".repeat(width))?;
+            if styled {
+                write!(output, "{white:#}")?;
+            }
+            writeln!(output)?;
+        }
     }
     output.flush()
 }

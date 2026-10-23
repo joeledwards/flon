@@ -16,6 +16,46 @@ Empty-directory assertions do not prove descriptor release on systems that
 unlink temporary files immediately. Crash cleanup and injected read/seek
 failures remain gaps.
 
+## Practical measurement sizes
+
+The workspace `scripts/measure-flon-matrix` now defaults to 1 GiB timing
+fixtures for **live timing only** and **separate generated 1 MiB live/confirmed
+output-hash fixtures**, with three
+repetitions. Both use the same shape, candidate count, seed and lexical
+parameters. Correctness fixtures are generated independently, never obtained by
+truncating JSON. Live/confirmed hashes compare only those smaller fixtures;
+they do not validate the output of the larger timed passes. Each fixture's size
+and input hash are recorded separately in the artifacts. The 64 KiB confirmed
+spill threshold remains unchanged; smaller multi-candidate fixtures may not
+spill, so retain selected large single-candidate spill checks.
+
+From the workspace root:
+
+```bash
+python3 scripts/measure-flon-matrix --spool-directory /tmp \
+  --toolchain-bin "$PWD/.tools/rust/rustup-home/toolchains/stable-x86_64-unknown-linux-gnu/bin"
+```
+
+Use `--mib 16` for exploration, `--hash-mib 2` to change correctness size,
+or `--gib 1` for selected scale evidence. Explicit `--gib 10` remains available
+as a stress campaign. Saved-command retries retain their original input size;
+`--check-output-command` does not shrink existing fixtures. Already running
+processes retain their loaded script and original campaign sizes.
+
+The default retains 1 GiB live timing; confirmed mode runs only on the small
+correctness fixtures. Large confirmed/spill timing is deferred to explicit
+manual campaigns below. Optional smaller timing
+fixtures can help exploratory work. Treat the 10 GiB cases as deferred stress evidence until
+justified by observed runtime and available resources; record omissions rather
+than claiming the full original checklist passed. There is no timing pass/fail
+threshold yet. Keep resource/depth/storage boundary tests despite reducing
+throughput fixture sizes.
+
+Hash-check duration includes output production, pipe transfer, byte counting
+and SHA-256. A slow check alone does not identify SHA-256 as the bottleneck.
+Parser-only measurements are described in
+[json-skimmer's guide](../../json-skimmer/docs/performance.md).
+
 ## Per-version checklist
 
 For the 1.0 release and subsequent versions, run the checks below manually and append results

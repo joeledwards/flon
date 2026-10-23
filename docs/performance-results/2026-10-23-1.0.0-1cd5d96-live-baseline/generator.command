@@ -1,0 +1,1 @@
+/usr/bin/time -v -o /home/joel/sandboxed/workspaces/rust-utilities/repos/flon/target/perf-1.0.0-e1r9uS/generator.time /home/joel/.cargo/bin/json-volcano --bytes 100MiB --seed 42 --shape records --candidates 1 --depth 1 --scenario valid --escape-percent 2 --unicode-percent 2 --stats 

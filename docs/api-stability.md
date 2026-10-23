@@ -29,6 +29,10 @@ unsafe code. This is not a transitive-dependency safety audit.
 - CLI defaults: buffered stdout (8 KiB), live/fail, automatic destination color,
   no summary. Immediate output flushes completed lines. Confirmed validity and
   delivery buffering are independent. Summaries/diagnostics use stderr.
+  Text summaries use human quantities and exact parentheticals; JSON/FLON
+  summaries preserve numeric literals without styling. Format selection enables
+  summaries and conflicts with disabling them. Machine fields/types follow
+  [the summary contract](summary.md); text layout is a presentation detail.
   BrokenPipe is successful early CLI termination; library callers receive it.
 
 ## Extension review

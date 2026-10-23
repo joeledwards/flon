@@ -1,0 +1,1 @@
+env CARGO_TARGET_DIR=/home/joel/sandboxed/workspaces/rust-utilities/repos/flon/target /home/joel/sandboxed/workspaces/rust-utilities/scripts/with-rust cargo build --offline --locked --release --bin flon 

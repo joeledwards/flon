@@ -1,0 +1,1 @@
+/usr/bin/time -v -o /home/joel/sandboxed/workspaces/rust-utilities/repos/flon/target/perf-1.0.0-e1r9uS/live-3.time bash -c exec\ \"\$@\"\ \>\ /dev/null baseline /home/joel/sandboxed/workspaces/rust-utilities/repos/flon/target/release/flon --color never --no-summary --output-mode live /home/joel/sandboxed/workspaces/rust-utilities/repos/flon/target/perf-1.0.0-e1r9uS/input.json 

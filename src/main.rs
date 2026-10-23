@@ -88,6 +88,10 @@ struct Cli {
     #[arg(long, short = 'v', conflicts_with = "no_summary")]
     summary: bool,
 
+    /// Select stderr summary format and enable summaries (default: text).
+    #[arg(long, value_enum, conflicts_with = "no_summary")]
+    summary_format: Option<summary::SummaryFormat>,
+
     /// Disable processing summaries, including the infinite profile default.
     #[arg(long, conflicts_with = "summary")]
     no_summary: bool,
@@ -175,6 +179,7 @@ struct EffectiveConfig {
     color: ColorChoice,
     buffering: Buffering,
     summary: bool,
+    summary_format: summary::SummaryFormat,
 }
 
 fn main() -> ExitCode {
@@ -205,6 +210,7 @@ fn run(cli: Cli) -> io::Result<()> {
         effective.summary,
         AutoStream::new(stderr.lock(), summary_color),
         styled,
+        effective.summary_format,
         |metrics| {
             let mut input: Box<dyn Read> = match cli.input.as_deref() {
                 None => Box::new(io::stdin()),
@@ -345,7 +351,11 @@ fn resolve(cli: &Cli, is_terminal: bool) -> EffectiveConfig {
         formatter,
         diagnostics,
         color,
-        summary: !cli.no_summary && (cli.summary || cli.profile == Some(Profile::Infinite)),
+        summary: !cli.no_summary
+            && (cli.summary
+                || cli.summary_format.is_some()
+                || cli.profile == Some(Profile::Infinite)),
+        summary_format: cli.summary_format.unwrap_or_default(),
         buffering: if cli.no_buffer {
             Buffering::Immediate
         } else {
@@ -564,24 +574,61 @@ mod tests {
     }
 
     #[test]
+    fn summary_format_enables_summary_and_conflicts_with_disable() {
+        assert_eq!(
+            resolve(&cli(&[])).summary_format,
+            summary::SummaryFormat::Text
+        );
+        for (name, expected) in [
+            ("text", summary::SummaryFormat::Text),
+            ("json", summary::SummaryFormat::Json),
+            ("flon", summary::SummaryFormat::Flon),
+        ] {
+            for profile in ["wraith", "infinite"] {
+                let cfg = resolve(&cli(&["--summary-format", name, "--profile", profile]));
+                assert!(cfg.summary);
+                assert_eq!(cfg.summary_format, expected);
+            }
+            assert!(
+                Cli::try_parse_from(["flon", "--summary-format", name, "--no-summary"]).is_err()
+            );
+            assert!(resolve(&cli(&["--summary", "--summary-format", name])).summary);
+        }
+        assert!(Cli::try_parse_from(["flon", "--summary-format", "yaml"]).is_err());
+    }
+
+    #[test]
     fn summaries_do_not_change_assignment_output() {
         for args in [
             vec!["--summary", "--color", "never"],
+            vec!["--summary-format", "text", "--color", "never"],
+            vec!["--summary-format", "json", "--color", "never"],
+            vec!["--summary-format", "flon", "--color", "never"],
             vec!["--profile", "infinite", "--color", "never"],
         ] {
             let config = resolve(&cli(&args));
             let mut stdout = Vec::new();
             let mut stderr = Vec::new();
-            summary::run(config.summary, &mut stderr, false, |metrics| {
-                write_stream_measured(b"[1]".as_slice(), &mut stdout, config, metrics)
-            })
+            let selected = config.summary_format;
+            summary::run(
+                config.summary,
+                &mut stderr,
+                false,
+                config.summary_format,
+                |metrics| write_stream_measured(b"[1]".as_slice(), &mut stdout, config, metrics),
+            )
             .unwrap();
             assert_eq!(stdout, b"json = [];\njson[0] = 1;\n");
-            assert!(
-                String::from_utf8(stderr)
-                    .unwrap()
-                    .starts_with("flon: completed in ")
-            );
+            let text = String::from_utf8(stderr).unwrap();
+            match selected {
+                summary::SummaryFormat::Text => assert!(text.contains("status: completed")),
+                summary::SummaryFormat::Json => {
+                    assert!(text.starts_with("{\"status\":\"completed\","))
+                }
+                summary::SummaryFormat::Flon => {
+                    assert!(text.starts_with("summary = {};\nsummary.status = \"completed\";"))
+                }
+            }
         }
     }
 
@@ -679,6 +726,7 @@ mod tests {
                     color: ColorChoice::Never,
                     buffering: Buffering::Buffered,
                     summary: false,
+                    summary_format: summary::SummaryFormat::Text,
                 },
             )
         });
@@ -696,6 +744,7 @@ mod tests {
                     color: ColorChoice::Never,
                     buffering: Buffering::Buffered,
                     summary: false,
+                    summary_format: summary::SummaryFormat::Text,
                 },
             )
         });
@@ -778,6 +827,7 @@ mod tests {
                     color: ColorChoice::Never,
                     buffering: Buffering::Buffered,
                     summary: false,
+                    summary_format: summary::SummaryFormat::Text,
                 },
             )
         });
@@ -795,6 +845,7 @@ mod tests {
                     color: ColorChoice::Never,
                     buffering: Buffering::Buffered,
                     summary: false,
+                    summary_format: summary::SummaryFormat::Text,
                 },
             )
         });

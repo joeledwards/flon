@@ -129,9 +129,10 @@ fn exact_plain_summary_and_styled_equivalence() {
     };
     let mut plain = Vec::new();
     write_summary(&mut plain, Duration::from_secs(2), &Ok(()), &metrics, false).unwrap();
+    let body = "FLON processing summary\nstatus: completed\nelapsed: 2.00 s (2000000000 ns)\ninput: 20.00 B (20 bytes)\noutput: 30.00 B (30 bytes)\ninput throughput: 10.00 B/s (10 bytes/s)\ncandidates started: 2\ncandidates completed: 1\ncandidates invalid: 1\ncandidates recovered: 1\nerrors: 1\nerrors recovered: 1\nerrors terminal: 0\nvalues (completed candidates): 0\nobjects: 0\narrays: 0\nstrings: 0\nnumbers: 0\nbooleans: 0\nnulls: 0\nkeys: 0\nmaximum value depth: 0\nvalues at depth 0: 0\nvalues at depth 1: 0\nvalues at depth 2: 0\nvalues at depth 3: 0\nvalues at depth 4: 0\nvalues at depth 5+: 0\nconfirmed output discarded: 0.00 B (0 bytes)\n";
     assert_eq!(
         String::from_utf8_lossy(&plain),
-        "flon: completed in 2.000s\n  input: 20 bytes (10 bytes/s)\n  output: 30 bytes\n  candidates: 2 started, 1 completed, 1 invalid, 1 recovered\n  errors: 1 (1 recovered, 0 terminal)\n  values: 0 (completed candidates)\n    objects: 0  arrays: 0  strings: 0\n    numbers: 0  booleans: 0  nulls: 0  keys: 0\n  depth: max 0\n    0: 0  1: 0  2: 0  3: 0  4: 0  5+: 0\n  recovery: 0 confirmed-output bytes discarded\n"
+        format!("\n{}\n{body}{}\n\n", "=".repeat(44), "-".repeat(44))
     );
     let mut stripped = Vec::new();
     write_summary(
@@ -146,7 +147,7 @@ fn exact_plain_summary_and_styled_equivalence() {
     let mut styled = Vec::new();
     write_summary(&mut styled, Duration::ZERO, &Ok(()), &metrics, true).unwrap();
     assert!(styled.starts_with(b"\x1b["));
-    assert!(styled.ends_with(b"\x1b[0m"));
+    assert!(styled.ends_with(b"\x1b[0m\n"));
 }
 
 struct Failure;
@@ -162,30 +163,35 @@ impl Write for Failure {
 #[test]
 fn summaries_preserve_processing_errors_and_disabled_is_silent() {
     for kind in [io::ErrorKind::InvalidData, io::ErrorKind::BrokenPipe] {
-        let error = run(true, Failure, false, |_| {
+        let error = run(true, Failure, false, SummaryFormat::Text, |_| {
             Err(io::Error::new(kind, "original"))
         })
         .unwrap_err();
         assert_eq!(error.kind(), kind);
         assert_eq!(error.to_string(), "original");
         let mut text = Vec::new();
-        run(true, &mut text, false, |_| Err(io::Error::from(kind))).unwrap_err();
+        run(true, &mut text, false, SummaryFormat::Text, |_| {
+            Err(io::Error::from(kind))
+        })
+        .unwrap_err();
         let text = String::from_utf8(text).unwrap();
         assert!(text.contains(if kind == io::ErrorKind::BrokenPipe {
             "pipe closed"
         } else {
             "failed"
         }));
-        assert!(text.contains("errors: 1 (0 recovered, 1 terminal)"));
+        assert!(text.contains("errors: 1\nerrors recovered: 0\nerrors terminal: 1\n"));
         assert!(!text.contains("NaN"));
     }
     assert_eq!(
-        run(true, Failure, false, |_| Ok(())).unwrap_err().kind(),
+        run(true, Failure, false, SummaryFormat::Text, |_| Ok(()))
+            .unwrap_err()
+            .kind(),
         io::ErrorKind::PermissionDenied
     );
     let mut text = Vec::new();
     let mut calls = 0;
-    run(false, &mut text, false, |_| {
+    run(false, &mut text, false, SummaryFormat::Text, |_| {
         calls += 1;
         Ok(())
     })
@@ -326,19 +332,44 @@ fn summary_handles_partial_writes_empty_input_and_long_durations() {
             Ok(())
         }
     }
-    for duration in [
-        Duration::ZERO,
-        Duration::from_millis(1234),
-        Duration::from_secs(3601),
+    for format in [
+        SummaryFormat::Text,
+        SummaryFormat::Json,
+        SummaryFormat::Flon,
     ] {
-        let mut expected = Vec::new();
-        let mut partial = Partial(Vec::new());
-        write_summary(&mut expected, duration, &Ok(()), &Metrics::default(), false).unwrap();
-        write_summary(&mut partial, duration, &Ok(()), &Metrics::default(), false).unwrap();
-        assert_eq!(expected, partial.0);
-        let text = String::from_utf8(expected).unwrap();
-        assert!(text.contains("input: 0 bytes (0 bytes/s)"));
-        assert!(!text.contains("NaN"));
+        for duration in [
+            Duration::ZERO,
+            Duration::from_millis(1234),
+            Duration::from_secs(3601),
+        ] {
+            let mut expected = Vec::new();
+            let mut partial = Partial(Vec::new());
+            write_formatted_summary(
+                &mut expected,
+                duration,
+                &Ok(()),
+                &Metrics::default(),
+                false,
+                format,
+            )
+            .unwrap();
+            write_formatted_summary(
+                &mut partial,
+                duration,
+                &Ok(()),
+                &Metrics::default(),
+                false,
+                format,
+            )
+            .unwrap();
+            assert_eq!(expected, partial.0);
+            let text = String::from_utf8(expected).unwrap();
+            if format == SummaryFormat::Text {
+                assert!(text.contains("input: 0.00 B (0 bytes)"));
+                assert!(text.contains("input throughput: 0.00 B/s (0 bytes/s)"));
+            }
+            assert!(!text.contains("NaN"));
+        }
     }
 }
 
@@ -353,19 +384,25 @@ fn enabled_work_runs_once_and_summary_flush_failures_propagate() {
             Err(io::ErrorKind::PermissionDenied.into())
         }
     }
-    let mut calls = 0;
-    let error = run(true, FlushFailure, false, |_| {
-        calls += 1;
-        Ok(())
-    })
-    .unwrap_err();
-    assert_eq!(calls, 1);
-    assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
-    let error = run(true, FlushFailure, false, |_| {
-        Err(io::ErrorKind::InvalidData.into())
-    })
-    .unwrap_err();
-    assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+    for format in [
+        SummaryFormat::Text,
+        SummaryFormat::Json,
+        SummaryFormat::Flon,
+    ] {
+        let mut calls = 0;
+        let error = run(true, FlushFailure, false, format, |_| {
+            calls += 1;
+            Ok(())
+        })
+        .unwrap_err();
+        assert_eq!(calls, 1);
+        assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
+        let error = run(true, FlushFailure, false, format, |_| {
+            Err(io::ErrorKind::InvalidData.into())
+        })
+        .unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+    }
 }
 
 #[test]
@@ -383,12 +420,16 @@ fn summary_colors_distinguish_labels_numbers_separators_and_failures() {
     let blue = anstyle::AnsiColor::Blue.on_default();
     let orange = anstyle::Ansi256Color(208).on_default();
     let white = anstyle::AnsiColor::White.on_default();
-    assert!(text.contains(&format!("{blue}input{white}: {orange}0{white} bytes (")));
-    assert!(text.contains(&format!("{orange}1.234{white}s\n")));
-    // Histogram depths are labels, while their counts are numeric values.
-    assert!(text.contains(&format!("{blue}5+{white}: {orange}0{white}")));
     assert!(text.contains(&format!(
-        "{blue}objects{white}: {orange}0{white}  {blue}arrays"
+        "{blue}input{white}: {orange}0.00 B (0 bytes){white}"
+    )));
+    assert!(text.contains(&format!("{orange}1.23 s (1234000000 ns){white}\n")));
+    // Histogram depths are labels, while their counts are numeric values.
+    assert!(text.contains(&format!(
+        "{blue}values at depth 5+{white}: {orange}0{white}"
+    )));
+    assert!(text.contains(&format!(
+        "{blue}objects{white}: {orange}0{white}\n{blue}arrays"
     )));
     for kind in [io::ErrorKind::InvalidData, io::ErrorKind::BrokenPipe] {
         let mut output = Vec::new();
@@ -436,5 +477,187 @@ fn candidate_limits_are_reported_without_committing_invalid_structure() {
         );
         assert_eq!(metrics.structure.kinds, [0, 1, 0, 1, 0, 0, 0]);
         assert_eq!(metrics.discarded_bytes > 0, mode == "confirmed");
+    }
+}
+
+#[test]
+fn machine_formats_have_exact_fixtures_and_ignore_color() {
+    let expected = concat!(
+        "{\"status\":\"completed\",\"elapsed_ns\":2000000000,\"input_bytes\":20,",
+        "\"output_bytes\":30,\"input_bytes_per_second\":10,",
+        "\"candidates_started\":2,\"candidates_completed\":1,\"candidates_invalid\":1,",
+        "\"candidates_recovered\":1,\"errors\":1,\"errors_recovered\":1,\"errors_terminal\":0,",
+        "\"values\":0,\"objects\":0,\"arrays\":0,\"strings\":0,\"numbers\":0,\"booleans\":0,",
+        "\"nulls\":0,\"keys\":0,\"max_depth\":0,\"depth_0\":0,\"depth_1\":0,\"depth_2\":0,",
+        "\"depth_3\":0,\"depth_4\":0,\"depth_5_plus\":0,\"discarded_bytes\":0}\n"
+    );
+    let metrics = Metrics {
+        input_bytes: 20,
+        output_bytes: 30,
+        started: 2,
+        completed: 1,
+        invalid: 1,
+        recovered: 1,
+        ..Metrics::default()
+    };
+    let mut json = Vec::new();
+    write_formatted_summary(
+        &mut json,
+        Duration::from_secs(2),
+        &Ok(()),
+        &metrics,
+        true,
+        SummaryFormat::Json,
+    )
+    .unwrap();
+    assert_eq!(json, expected.as_bytes());
+    // The actual formatter independently checks JSON syntax, assignments, and values.
+    let formatted = flon::format(json.as_slice(), Vec::new()).unwrap();
+    let expected_flon = String::from_utf8(formatted)
+        .unwrap()
+        .replace("json", "summary");
+    for styled in [false, true] {
+        let mut output = Vec::new();
+        write_formatted_summary(
+            &mut output,
+            Duration::from_secs(2),
+            &Ok(()),
+            &metrics,
+            styled,
+            SummaryFormat::Flon,
+        )
+        .unwrap();
+        assert_eq!(output, expected_flon.as_bytes());
+    }
+}
+
+#[test]
+fn literal_values_survive_large_counts_and_long_durations() {
+    let metrics = Metrics {
+        input_bytes: u64::MAX,
+        output_bytes: u64::MAX,
+        completed: u64::MAX,
+        recovered: u64::MAX,
+        ..Metrics::default()
+    };
+    let duration = Duration::new(u64::MAX, 999_999_999);
+    for format in [
+        SummaryFormat::Text,
+        SummaryFormat::Json,
+        SummaryFormat::Flon,
+    ] {
+        let mut output = Vec::new();
+        write_formatted_summary(
+            &mut output,
+            duration,
+            &Err(io::ErrorKind::InvalidData.into()),
+            &metrics,
+            false,
+            format,
+        )
+        .unwrap();
+        let text = String::from_utf8(output).unwrap();
+        assert!(text.contains("18446744073709551615"));
+        assert!(text.contains("18446744073709551615999999999"));
+        assert!(!text.contains("NaN"));
+        assert!(!text.contains("inf"));
+        if format == SummaryFormat::Json {
+            assert!(text.contains("\"errors\":18446744073709551615"));
+            flon::format(text.as_bytes(), Vec::new()).unwrap();
+        }
+    }
+}
+
+#[test]
+fn text_quantities_and_borders_cover_unit_boundaries() {
+    for (bytes, human) in [
+        (0, "0.00 B"),
+        (1023, "1023.00 B"),
+        (1024, "1.00 KiB"),
+        (1048576, "1.00 MiB"),
+        (1073741824, "1.00 GiB"),
+    ] {
+        let metrics = Metrics {
+            input_bytes: bytes,
+            completed: 1234567,
+            ..Metrics::default()
+        };
+        for duration in [
+            Duration::ZERO,
+            Duration::from_nanos(1),
+            Duration::from_micros(1),
+            Duration::from_millis(1),
+            Duration::from_secs(60),
+            Duration::from_secs(3600),
+        ] {
+            let mut output = Vec::new();
+            write_summary(&mut output, duration, &Ok(()), &metrics, false).unwrap();
+            let text = String::from_utf8(output).unwrap();
+            assert!(text.starts_with('\n') && text.ends_with("\n\n"));
+            assert!(text.contains(&format!("input: {human} ({bytes} bytes)")));
+            assert!(text.contains("candidates completed: 1.23 M (1234567)"));
+            let lines: Vec<_> = text.lines().collect();
+            let width = lines[1].len();
+            assert!(lines[1].bytes().all(|b| b == b'='));
+            let footer = lines[lines.len() - 2];
+            assert_eq!(footer, "-".repeat(width));
+            assert_eq!(
+                lines[2..lines.len() - 2]
+                    .iter()
+                    .map(|line| line.chars().count())
+                    .max(),
+                Some(width)
+            );
+        }
+    }
+}
+
+#[test]
+fn each_format_preserves_statuses_and_writer_errors() {
+    for format in [
+        SummaryFormat::Text,
+        SummaryFormat::Json,
+        SummaryFormat::Flon,
+    ] {
+        for (kind, status) in [
+            (io::ErrorKind::InvalidData, "failed"),
+            (io::ErrorKind::BrokenPipe, "pipe closed"),
+        ] {
+            let mut output = Vec::new();
+            run(true, &mut output, true, format, |_| {
+                Err(io::Error::new(kind, "original"))
+            })
+            .unwrap_err();
+            assert!(String::from_utf8(output).unwrap().contains(status));
+            let err = run(true, Failure, false, format, |_| {
+                Err(io::Error::new(kind, "original"))
+            })
+            .unwrap_err();
+            assert_eq!(err.kind(), kind);
+            assert_eq!(err.to_string(), "original");
+        }
+        assert_eq!(
+            run(true, Failure, false, format, |_| Ok(()))
+                .unwrap_err()
+                .kind(),
+            io::ErrorKind::PermissionDenied
+        );
+        let mut output = Vec::new();
+        run(false, &mut output, false, format, |_| Ok(())).unwrap();
+        assert!(output.is_empty());
+        let mut zero = Vec::new();
+        write_formatted_summary(
+            &mut zero,
+            Duration::ZERO,
+            &Ok(()),
+            &Metrics::default(),
+            false,
+            format,
+        )
+        .unwrap();
+        assert!(!String::from_utf8_lossy(&zero).contains("NaN"));
+        if format == SummaryFormat::Json {
+            flon::format(zero.as_slice(), Vec::new()).unwrap();
+        }
     }
 }
