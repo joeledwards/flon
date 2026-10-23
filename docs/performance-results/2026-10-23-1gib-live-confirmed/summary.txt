@@ -1,0 +1,55 @@
+1 GiB / records / 1 candidates / live
+  Runs passed: 3
+  Median wall time: 17.03 s
+  Wall time range: 16.95–17.27 s
+  Median input throughput: 60.13 MiB/s
+  Peak RSS range: 2.52–2.72 MiB (2584–2784 KiB)
+
+1 GiB / records / 1 candidates / confirmed
+  Runs passed: 3
+  Median wall time: 316.45 s
+  Wall time range: 316.35–316.72 s
+  Median input throughput: 3.24 MiB/s
+  Peak RSS range: 2.48–2.66 MiB (2544–2720 KiB)
+
+1 GiB / records / 1024 candidates / live
+  Runs passed: 3
+  Median wall time: 16.86 s
+  Wall time range: 16.78–16.87 s
+  Median input throughput: 60.74 MiB/s
+  Peak RSS range: 2.52–2.62 MiB (2584–2680 KiB)
+
+1 GiB / records / 1024 candidates / confirmed
+  Runs passed: 3
+  Median wall time: 303.89 s
+  Wall time range: 302.02–304.71 s
+  Median input throughput: 3.37 MiB/s
+  Peak RSS range: 2.49–2.65 MiB (2548–2712 KiB)
+
+1 GiB / string / 1 candidates / live
+  Runs passed: 3
+  Median wall time: 9.40 s
+  Wall time range: 9.35–9.46 s
+  Median input throughput: 108.94 MiB/s
+  Peak RSS range: 2.45–2.61 MiB (2504–2676 KiB)
+
+1 GiB / string / 1 candidates / confirmed
+  Runs passed: 3
+  Median wall time: 10.15 s
+  Wall time range: 10.10–10.21 s
+  Median input throughput: 100.89 MiB/s
+  Peak RSS range: 2.49–2.74 MiB (2548–2804 KiB)
+
+1 GiB / string / 1024 candidates / live
+  Runs passed: 3
+  Median wall time: 9.42 s
+  Wall time range: 9.41–9.44 s
+  Median input throughput: 108.70 MiB/s
+  Peak RSS range: 2.47–2.49 MiB (2528–2548 KiB)
+
+1 GiB / string / 1024 candidates / confirmed
+  Runs passed: 3
+  Median wall time: 10.08 s
+  Wall time range: 10.05–10.09 s
+  Median input throughput: 101.59 MiB/s
+  Peak RSS range: 2.49–2.55 MiB (2548–2608 KiB)

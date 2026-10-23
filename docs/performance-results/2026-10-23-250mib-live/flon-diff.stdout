@@ -1,0 +1,1152 @@
+diff --git a/README.md b/README.md
+index 0340a29..0b0c77b 100644
+--- a/README.md
++++ b/README.md
+@@ -120,6 +120,30 @@ Use `--summary` (or `-v`) to report processing metrics on stderr:
+ ../../scripts/with-rust cargo run -- --profile infinite --no-summary example.json
+ ```
+ 
++Choose `--summary-format text|json|flon`; selecting a format enables the summary
++and conflicts with `--no-summary`. Text is the default for `--summary`, `-v`
++and the infinite profile. For example:
++
++```bash
++flon --summary-format json --diagnostics quiet example.json 2> summary.json
++flon --summary-format flon --diagnostics quiet example.json 2> summary.flon
++```
++
++Text prints one metric per line, human-readable quantities followed by literal
++values in parentheses. Small counts are already literal and appear once. Bytes
++use binary units (KiB/MiB/GiB); large counts use decimal k/M/G suffixes. Rounded
++human quantities have two decimal places. Blank lines separate the block from
++surrounding output; an `=` header and `-` footer match its widest visible line,
++ignoring ANSI colors. Very large literal values can produce wide lines; the
++block is not clipped to the terminal width.
++
++JSON emits one object on one line; FLON emits assignments rooted at `summary`.
++Both always use plain, unrounded numeric literals, even with `--color always`.
++Field meanings and types are documented in [summary formats](docs/summary.md).
++Recovery diagnostics and terminal error messages still share stderr; `--diagnostics=quiet` suppresses recovery diagnostics, but failed runs can append a terminal
++error after the structured summary. These examples produce a standalone summary
++file only when there are no other stderr messages.
++
+ A summary includes elapsed time, input bytes and throughput, output bytes,
+ candidates started/completed/invalid/recovered, errors, value counts by JSON
+ type, object-key counts, maximum value depth, and a depth histogram (0–4,
+@@ -140,7 +164,7 @@ The recovery line reports discarded confirmed-output bytes.
+ Timing covers input opening through final output flushing using a monotonic
+ clock. Throughput is input bytes divided by that time. Failed runs and closed
+ pipes report `failed` and `pipe closed`; stdout remains assignment-only.
+-Summary colors follow the resolved color policy, with automatic color determined
++Text summary colors follow the resolved color policy, with automatic color determined
+ from **stderr**, independently of stdout. `--diagnostics=quiet` controls recovery
+ messages independently of summaries. `--show-config` emits no summary.
+ 
+diff --git a/ROADMAP.md b/ROADMAP.md
+index 09737b3..3955177 100644
+--- a/ROADMAP.md
++++ b/ROADMAP.md
+@@ -49,6 +49,8 @@ pending validation and publication remain unchecked. See
+       by default in `infinite` with `--no-summary` override
+ - [x] Expand summaries with byte/throughput, candidate/error, completed-value type
+       and depth metrics; color summaries according to the stderr destination
++- [x] Add text/JSON/FLON summary formats; readable one-metric-per-line text,
++      exact literals, and separators sized independently of ANSI styling
+ - [x] Keep URL fetching out of scope; consume curl/wget/aqui output via stdin
+ 
+ ## 1.0.0 — acceptance and release gates
+diff --git a/docs/api-stability.md b/docs/api-stability.md
+index 8b83b3a..7e73326 100644
+--- a/docs/api-stability.md
++++ b/docs/api-stability.md
+@@ -29,6 +29,10 @@ unsafe code. This is not a transitive-dependency safety audit.
+ - CLI defaults: buffered stdout (8 KiB), live/fail, automatic destination color,
+   no summary. Immediate output flushes completed lines. Confirmed validity and
+   delivery buffering are independent. Summaries/diagnostics use stderr.
++  Text summaries use human quantities and exact parentheticals; JSON/FLON
++  summaries preserve numeric literals without styling. Format selection enables
++  summaries and conflicts with disabling them. Machine fields/types follow
++  [the summary contract](summary.md); text layout is a presentation detail.
+   BrokenPipe is successful early CLI termination; library callers receive it.
+ 
+ ## Extension review
+diff --git a/docs/performance-results.md b/docs/performance-results.md
+index ee9c665..c24ba5d 100644
+--- a/docs/performance-results.md
++++ b/docs/performance-results.md
+@@ -75,6 +75,45 @@ giant strings, many candidates, malformed recovery, and 10 GiB runs. Earlier
+ ~15 MiB results from the legacy generated/hash-sink harness are a different
+ workload and must not be combined with this table.
+ 
++## 2026-10-23 — 1.0.0 live file-input baseline
++
++Developer-run via workspace `scripts/measure-flon-baseline`; all build,
++generation and measurement exit statuses were zero. [Raw artifacts and metadata](performance-results/2026-10-23-1.0.0-1cd5d96-live-baseline/metadata.txt)
++are retained alongside commands, timings, executable/input SHA-256 hashes,
++manifests and lockfile; the generated 100 MiB fixture is excluded.
++
++FLON revision `1cd5d96790d9ce678e69404abacf155fae5da205`, local parser
++`a9f573738ed17c4c2859b69f26f7d95ebadabca8`; both working trees were clean.
++Offline locked release build, Rust 1.99.1 / LLVM 23.1.1, x86_64 Linux.
++Host hulk: Ryzen 9 5950X, 121 GiB reported RAM, kernel 7.0.0-34-generic,
++ext4 on /dev/nvme0n1p2. Input was freshly generated; cache was not flushed,
++background load uncontrolled. Cargo configuration and all effective compiler
++flags were not exhaustively captured; caller environment and build log are saved.
++
++Published json-volcano 1.0.0, corpus 1, seed 42, records shape, one valid
++candidate, depth 1, escape/unicode probabilities 2 percent each. Input size
++104,857,600 bytes. Generator reported 0.234767 seconds / 425.955 MiB/s;
++its separate GNU time result is retained. FLON read the completed file with
++live output, color never, summaries disabled and stdout sent to /dev/null.
++
++| Run | Wall seconds | Input MiB/s | Peak RSS (KiB) | Exit |
++| --- | ---: | ---: | ---: | ---: |
++| 1 | 1.69 | 59.17 | 3688 | 0 |
++| 2 | 1.65 | 60.61 | 3824 | 0 |
++| 3 | 1.66 | 60.24 | 3696 | 0 |
++
++Median wall time **1.66 s** (min/max 1.65–1.69); median input throughput
++**60.24 MiB/s** (59.17–60.61); median peak RSS **3696 KiB**
++(range 3688–3824 KiB). GNU time wall measurements have hundredth-second
++precision. No output correctness/hash comparison was performed by this script.
++This file-input result is not directly comparable with the earlier pipeline
++measurements and establishes no Node/Rust equivalent-work speedup.
++
++Release gate remains open: 1/10 GiB, giant strings, many candidates, deep and
++long-lived streams, parser allocation/RSS evidence, memory-only/forced-spill
++confirmed output, malformed recovery/cleanup, summary overhead, legacy workload,
++and Node/Rust equivalence remain to record.
++
+ ## Entry template
+ 
+ Copy this section for each version/build:
+diff --git a/docs/performance.md b/docs/performance.md
+index 47e712e..4d80440 100644
+--- a/docs/performance.md
++++ b/docs/performance.md
+@@ -16,6 +16,46 @@ Empty-directory assertions do not prove descriptor release on systems that
+ unlink temporary files immediately. Crash cleanup and injected read/seek
+ failures remain gaps.
+ 
++## Practical measurement sizes
++
++The workspace `scripts/measure-flon-matrix` now defaults to 1 GiB timing
++fixtures for **live timing only** and **separate generated 1 MiB live/confirmed
++output-hash fixtures**, with three
++repetitions. Both use the same shape, candidate count, seed and lexical
++parameters. Correctness fixtures are generated independently, never obtained by
++truncating JSON. Live/confirmed hashes compare only those smaller fixtures;
++they do not validate the output of the larger timed passes. Each fixture's size
++and input hash are recorded separately in the artifacts. The 64 KiB confirmed
++spill threshold remains unchanged; smaller multi-candidate fixtures may not
++spill, so retain selected large single-candidate spill checks.
++
++From the workspace root:
++
++```bash
++python3 scripts/measure-flon-matrix --spool-directory /tmp \
++  --toolchain-bin "$PWD/.tools/rust/rustup-home/toolchains/stable-x86_64-unknown-linux-gnu/bin"
++```
++
++Use `--mib 16` for exploration, `--hash-mib 2` to change correctness size,
++or `--gib 1` for selected scale evidence. Explicit `--gib 10` remains available
++as a stress campaign. Saved-command retries retain their original input size;
++`--check-output-command` does not shrink existing fixtures. Already running
++processes retain their loaded script and original campaign sizes.
++
++The default retains 1 GiB live timing; confirmed mode runs only on the small
++correctness fixtures. Large confirmed/spill timing is deferred to explicit
++manual campaigns below. Optional smaller timing
++fixtures can help exploratory work. Treat the 10 GiB cases as deferred stress evidence until
++justified by observed runtime and available resources; record omissions rather
++than claiming the full original checklist passed. There is no timing pass/fail
++threshold yet. Keep resource/depth/storage boundary tests despite reducing
++throughput fixture sizes.
++
++Hash-check duration includes output production, pipe transfer, byte counting
++and SHA-256. A slow check alone does not identify SHA-256 as the bottleneck.
++Parser-only measurements are described in
++[json-skimmer's guide](../../json-skimmer/docs/performance.md).
++
+ ## Per-version checklist
+ 
+ For the 1.0 release and subsequent versions, run the checks below manually and append results
+diff --git a/docs/test-coverage.md b/docs/test-coverage.md
+index 7419c34..148755a 100644
+--- a/docs/test-coverage.md
++++ b/docs/test-coverage.md
+@@ -17,7 +17,7 @@ policy tests live in `src/output_tests.rs`; summary metrics tests live in
+ | Streaming fixture generator | Published json-volcano 1.0 dev-dependency: exact string assignments with Unicode/escapes, valid/invalid/mixed/truncated commit/discard, whole/every split/one-byte input, memory/spill and cleanup in `published_volcano_fixtures_commit_valid_candidates_and_discard_failures`. Generator owned and unit-tested by the companion [json-volcano project](../../json-volcano/README.md); FLON usage documented in [generator guide](json-generator.md) | Node/Rust plain-output equivalence; actual GiB-scale runs and measured RSS |
+ | Large randomized content | Fixed-seed valid/late-invalid/mixed candidates with independent output digest oracle; memory/immediate-spill/transition modes; one-byte/4093/8192-byte reads; large truncation, output-limit failure and formatter-drop cleanup; Linux internal spool ENOSPC via `/dev/full`; ignored tunable release workload with versioned JSONL metrics | Real quota-limited filesystem ENOSPC across full adapters, creation/copy failures, descriptor/crash cleanup, RSS/disk counters; see [performance guide](performance.md) |
+ | Confirmed storage | Invisibility before commit, exact limits, per-candidate reset, spill, discard, cleanup including every truncated prefix of representative 2/3/4-byte UTF-8 characters in keys and values at EOF, in memory and file-backed modes; missing-directory spill-creation errors release no output (immediate spill and memory-to-file transition); memory/file-backed commit failures preserve exact partial destination writes and clean spool storage across recovery policies | Injected spool creation/copy/read/seek failures; full-adapter ENOSPC (internal file write covered); see large-content row |
+-| Summaries | Exact plain/styled output, semantic label/number/separator/status colors, zero/long durations, policy/alias/override, separate stdout/stderr, disabled silence, writer failure precedence/partial writes; completed-value types/keys/depths across every split and one-byte chunks, Unicode/escapes/numbers, recovery/invalid UTF-8/truncation rollback, histogram overflow, suppressed values, depth/key/storage limits, partial destination writes, broken pipes, read/final-flush errors, ANSI byte accounting and memory/file-backed discard | Broader compiled summary/environment matrix; size extremes and spill totals not implemented |
++| Summaries | Exact text/JSON/FLON fixtures; format enable/conflict/default/profile and stdout separation; human byte/count/time units, exact large integers, zero/long durations, dynamically sized ASCII borders and styled equivalence; all-format partial writes/flush errors and processing-error precedence; exact plain/styled output, semantic label/number/separator/status colors, zero/long durations, policy/alias/override, separate stdout/stderr, disabled silence, writer failure precedence/partial writes; completed-value types/keys/depths across every split and one-byte chunks, Unicode/escapes/numbers, recovery/invalid UTF-8/truncation rollback, histogram overflow, suppressed values, depth/key/storage limits, partial destination writes, broken pipes, read/final-flush errors, ANSI byte accounting and memory/file-backed discard | Broader compiled summary/environment matrix; per-format compiled CLI matrix and spill totals remain open |
+ | CLI output buffering | Buffered default, immediate/no-buffer/-B selection and conflicts, profile independence, line visibility before next input read, confirmed withholding, multi-line commits, final partial lines, large lines, partial writes and flush failures | Interactive/TTY delivery timing; compiled tests cover finite-input policy selections |
+ | Writers | Two-byte partial writes; byte budgets; BrokenPipe, PermissionDenied, WriteZero propagation in live and confirmed modes; actual `Ok(0)` responses before/after partial writes and candidate boundaries in live, memory-backed confirmed, and file-backed confirmed modes across fail/skip/comment policies; exact output prefixes, no further writes/reads after failure, spool cleanup | Broader writer-failure corpus |
+ | EOF error preservation | Enabled regression; shared library/CLI checks for first-error identity, no writes after failure, all recovery policies, numeric forms, ANSI/plain output, and confirmed limits crossed at EOF in memory/file-backed modes | Broader input I/O failure coverage |
+@@ -46,3 +46,10 @@ integration-test authorization:
+ ```bash
+ ../../scripts/with-rust cargo test --offline --locked --test cli
+ ```
++
++Workspace measurement tooling: `scripts/test_measure_flon_matrix.py` checks
++native hash/count output and failures, timing summaries and selection of an
++independent smaller correctness fixture without changing mode/storage options.
++These isolated tests do not execute FLON benchmarks. Small-fixture digest
++agreement does not prove large timed-output equivalence; selected large spill
++and storage-boundary evidence remains required.
+diff --git a/src/main.rs b/src/main.rs
+index 8673041..5525f01 100644
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -88,6 +88,10 @@ struct Cli {
+     #[arg(long, short = 'v', conflicts_with = "no_summary")]
+     summary: bool,
+ 
++    /// Select stderr summary format and enable summaries (default: text).
++    #[arg(long, value_enum, conflicts_with = "no_summary")]
++    summary_format: Option<summary::SummaryFormat>,
++
+     /// Disable processing summaries, including the infinite profile default.
+     #[arg(long, conflicts_with = "summary")]
+     no_summary: bool,
+@@ -175,6 +179,7 @@ struct EffectiveConfig {
+     color: ColorChoice,
+     buffering: Buffering,
+     summary: bool,
++    summary_format: summary::SummaryFormat,
+ }
+ 
+ fn main() -> ExitCode {
+@@ -205,6 +210,7 @@ fn run(cli: Cli) -> io::Result<()> {
+         effective.summary,
+         AutoStream::new(stderr.lock(), summary_color),
+         styled,
++        effective.summary_format,
+         |metrics| {
+             let mut input: Box<dyn Read> = match cli.input.as_deref() {
+                 None => Box::new(io::stdin()),
+@@ -345,7 +351,11 @@ fn resolve(cli: &Cli, is_terminal: bool) -> EffectiveConfig {
+         formatter,
+         diagnostics,
+         color,
+-        summary: !cli.no_summary && (cli.summary || cli.profile == Some(Profile::Infinite)),
++        summary: !cli.no_summary
++            && (cli.summary
++                || cli.summary_format.is_some()
++                || cli.profile == Some(Profile::Infinite)),
++        summary_format: cli.summary_format.unwrap_or_default(),
+         buffering: if cli.no_buffer {
+             Buffering::Immediate
+         } else {
+@@ -563,25 +573,62 @@ mod tests {
+         assert!(Cli::try_parse_from(["flon", "--summary", "--no-summary"]).is_err());
+     }
+ 
++    #[test]
++    fn summary_format_enables_summary_and_conflicts_with_disable() {
++        assert_eq!(
++            resolve(&cli(&[])).summary_format,
++            summary::SummaryFormat::Text
++        );
++        for (name, expected) in [
++            ("text", summary::SummaryFormat::Text),
++            ("json", summary::SummaryFormat::Json),
++            ("flon", summary::SummaryFormat::Flon),
++        ] {
++            for profile in ["wraith", "infinite"] {
++                let cfg = resolve(&cli(&["--summary-format", name, "--profile", profile]));
++                assert!(cfg.summary);
++                assert_eq!(cfg.summary_format, expected);
++            }
++            assert!(
++                Cli::try_parse_from(["flon", "--summary-format", name, "--no-summary"]).is_err()
++            );
++            assert!(resolve(&cli(&["--summary", "--summary-format", name])).summary);
++        }
++        assert!(Cli::try_parse_from(["flon", "--summary-format", "yaml"]).is_err());
++    }
++
+     #[test]
+     fn summaries_do_not_change_assignment_output() {
+         for args in [
+             vec!["--summary", "--color", "never"],
++            vec!["--summary-format", "text", "--color", "never"],
++            vec!["--summary-format", "json", "--color", "never"],
++            vec!["--summary-format", "flon", "--color", "never"],
+             vec!["--profile", "infinite", "--color", "never"],
+         ] {
+             let config = resolve(&cli(&args));
+             let mut stdout = Vec::new();
+             let mut stderr = Vec::new();
+-            summary::run(config.summary, &mut stderr, false, |metrics| {
+-                write_stream_measured(b"[1]".as_slice(), &mut stdout, config, metrics)
+-            })
++            let selected = config.summary_format;
++            summary::run(
++                config.summary,
++                &mut stderr,
++                false,
++                config.summary_format,
++                |metrics| write_stream_measured(b"[1]".as_slice(), &mut stdout, config, metrics),
++            )
+             .unwrap();
+             assert_eq!(stdout, b"json = [];\njson[0] = 1;\n");
+-            assert!(
+-                String::from_utf8(stderr)
+-                    .unwrap()
+-                    .starts_with("flon: completed in ")
+-            );
++            let text = String::from_utf8(stderr).unwrap();
++            match selected {
++                summary::SummaryFormat::Text => assert!(text.contains("status: completed")),
++                summary::SummaryFormat::Json => {
++                    assert!(text.starts_with("{\"status\":\"completed\","))
++                }
++                summary::SummaryFormat::Flon => {
++                    assert!(text.starts_with("summary = {};\nsummary.status = \"completed\";"))
++                }
++            }
+         }
+     }
+ 
+@@ -679,6 +726,7 @@ mod tests {
+                     color: ColorChoice::Never,
+                     buffering: Buffering::Buffered,
+                     summary: false,
++                    summary_format: summary::SummaryFormat::Text,
+                 },
+             )
+         });
+@@ -696,6 +744,7 @@ mod tests {
+                     color: ColorChoice::Never,
+                     buffering: Buffering::Buffered,
+                     summary: false,
++                    summary_format: summary::SummaryFormat::Text,
+                 },
+             )
+         });
+@@ -778,6 +827,7 @@ mod tests {
+                     color: ColorChoice::Never,
+                     buffering: Buffering::Buffered,
+                     summary: false,
++                    summary_format: summary::SummaryFormat::Text,
+                 },
+             )
+         });
+@@ -795,6 +845,7 @@ mod tests {
+                     color: ColorChoice::Never,
+                     buffering: Buffering::Buffered,
+                     summary: false,
++                    summary_format: summary::SummaryFormat::Text,
+                 },
+             )
+         });
+diff --git a/src/output_tests.rs b/src/output_tests.rs
+index 268debf..f8cfa90 100644
+--- a/src/output_tests.rs
++++ b/src/output_tests.rs
+@@ -42,6 +42,7 @@ fn effective(buffering: Buffering, output_mode: OutputMode) -> EffectiveConfig {
+         color: ColorChoice::Never,
+         buffering,
+         summary: false,
++        summary_format: crate::summary::SummaryFormat::Text,
+     }
+ }
+ 
+diff --git a/src/summary.rs b/src/summary.rs
+index 142280d..54faa35 100644
+--- a/src/summary.rs
++++ b/src/summary.rs
+@@ -107,17 +107,34 @@ impl<W: Write> Write for CountWriter<'_, W> {
+     }
+ }
+ 
++/// Machine formats always use unstyled literal values.
++#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, clap::ValueEnum)]
++pub(super) enum SummaryFormat {
++    #[default]
++    Text,
++    Json,
++    Flon,
++}
++
+ pub(super) fn run(
+     enabled: bool,
+     mut diagnostics: impl Write,
+     styled: bool,
++    format: SummaryFormat,
+     work: impl FnOnce(&mut Metrics) -> io::Result<()>,
+ ) -> io::Result<()> {
+     let start = enabled.then(Instant::now);
+     let mut metrics = Metrics::default();
+     let result = work(&mut metrics);
+     if let Some(start) = start {
+-        let summary = write_summary(&mut diagnostics, start.elapsed(), &result, &metrics, styled);
++        let summary = write_formatted_summary(
++            &mut diagnostics,
++            start.elapsed(),
++            &result,
++            &metrics,
++            styled,
++            format,
++        );
+         if result.is_ok() {
+             summary?;
+         }
+@@ -125,159 +142,255 @@ pub(super) fn run(
+     result
+ }
+ 
++#[cfg(test)]
+ fn write_summary(
++    output: impl Write,
++    elapsed: Duration,
++    result: &io::Result<()>,
++    metrics: &Metrics,
++    styled: bool,
++) -> io::Result<()> {
++    write_formatted_summary(
++        output,
++        elapsed,
++        result,
++        metrics,
++        styled,
++        SummaryFormat::Text,
++    )
++}
++
++// Human quantities are approximate; literal integer fields never pass through f64.
++fn quantity(value: f64, units: &[&str], base: f64) -> String {
++    let mut scaled = value;
++    let mut unit = 0;
++    while scaled >= base && unit + 1 < units.len() {
++        scaled /= base;
++        unit += 1;
++    }
++    format!("{scaled:.2} {}", units[unit]).trim_end().to_owned()
++}
++
++struct Field {
++    name: &'static str,
++    label: &'static str,
++    literal: String,
++    readable: String,
++}
++
++fn write_formatted_summary(
+     mut output: impl Write,
+     elapsed: Duration,
+     result: &io::Result<()>,
+     metrics: &Metrics,
+     styled: bool,
++    format: SummaryFormat,
+ ) -> io::Result<()> {
+     let status = match result {
+         Ok(()) => "completed",
+         Err(error) if error.kind() == io::ErrorKind::BrokenPipe => "pipe closed",
+         Err(_) => "failed",
+     };
+-    let blue = anstyle::AnsiColor::Blue.on_default();
+-    let orange = anstyle::Ansi256Color(208).on_default();
+-    let white = anstyle::AnsiColor::White.on_default();
+-    let red = anstyle::AnsiColor::Red.on_default();
+-    macro_rules! key {
+-        ($value:expr) => {
+-            SummaryToken {
+-                value: $value,
+-                style: blue,
+-                styled,
+-            }
+-        };
+-    }
+-    macro_rules! number {
+-        ($value:expr) => {
+-            SummaryToken {
+-                value: $value,
+-                style: orange,
+-                styled,
+-            }
+-        };
+-    }
+-    if styled {
+-        write!(output, "{white}")?;
+-    }
+-    let status = SummaryToken {
+-        value: status,
+-        style: if result.is_err() { red } else { white },
+-        styled,
++    let mut fields = Vec::new();
++    let mut add = |name, label, literal: String, readable| {
++        fields.push(Field {
++            name,
++            label,
++            literal,
++            readable,
++        });
+     };
+-    writeln!(
+-        output,
+-        "{}: {status} in {}s",
+-        key!("flon"),
+-        number!(format_args!("{:.3}", elapsed.as_secs_f64()))
+-    )?;
++    let seconds = elapsed.as_secs_f64();
++    let duration = if seconds < 1.0 {
++        quantity(seconds * 1e9, &["ns", "µs", "ms", "s"], 1000.0)
++    } else if seconds < 60.0 {
++        format!("{seconds:.2} s")
++    } else if seconds < 3600.0 {
++        format!("{:.2} min", seconds / 60.0)
++    } else {
++        format!("{:.2} h", seconds / 3600.0)
++    };
++    add(
++        "elapsed_ns",
++        "elapsed",
++        elapsed.as_nanos().to_string(),
++        format!("{duration} ({} ns)", elapsed.as_nanos()),
++    );
++    let bytes = |value: u64| {
++        format!(
++            "{} ({value} bytes)",
++            quantity(
++                value as f64,
++                &["B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB"],
++                1024.0
++            )
++        )
++    };
++    add(
++        "input_bytes",
++        "input",
++        metrics.input_bytes.to_string(),
++        bytes(metrics.input_bytes),
++    );
++    add(
++        "output_bytes",
++        "output",
++        metrics.output_bytes.to_string(),
++        bytes(metrics.output_bytes),
++    );
+     let rate = if elapsed.is_zero() {
+         0.0
+     } else {
+-        metrics.input_bytes as f64 / elapsed.as_secs_f64()
++        metrics.input_bytes as f64 / seconds
+     };
+-    writeln!(
+-        output,
+-        "  {}: {} bytes ({} bytes/s)",
+-        key!("input"),
+-        number!(metrics.input_bytes),
+-        number!(format_args!("{rate:.0}"))
+-    )?;
+-    writeln!(
+-        output,
+-        "  {}: {} bytes",
+-        key!("output"),
+-        number!(metrics.output_bytes)
+-    )?;
+-    writeln!(
+-        output,
+-        "  {}: {} {}, {} {}, {} {}, {} {}",
+-        key!("candidates"),
+-        number!(metrics.started),
+-        key!("started"),
+-        number!(metrics.completed),
+-        key!("completed"),
+-        number!(metrics.invalid),
+-        key!("invalid"),
+-        number!(metrics.recovered),
+-        key!("recovered")
+-    )?;
+-    writeln!(
+-        output,
+-        "  {}: {} ({} {}, {} {})",
+-        key!("errors"),
+-        number!(metrics.recovered.saturating_add(u64::from(result.is_err()))),
+-        number!(metrics.recovered),
+-        key!("recovered"),
+-        number!(u8::from(result.is_err())),
+-        key!("terminal")
+-    )?;
++    add(
++        "input_bytes_per_second",
++        "input throughput",
++        rate.to_string(),
++        format!(
++            "{}/s ({rate} bytes/s)",
++            quantity(
++                rate,
++                &["B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB"],
++                1024.0
++            )
++        ),
++    );
+     let s = &metrics.structure;
+     let total = s.kinds[..6]
+         .iter()
+         .copied()
+         .fold(0_u64, u64::saturating_add);
+-    writeln!(
+-        output,
+-        "  {}: {} (completed candidates)",
+-        key!("values"),
+-        number!(total)
+-    )?;
+-    writeln!(
+-        output,
+-        "    {}: {}  {}: {}  {}: {}",
+-        key!("objects"),
+-        number!(s.kinds[0]),
+-        key!("arrays"),
+-        number!(s.kinds[1]),
+-        key!("strings"),
+-        number!(s.kinds[2])
+-    )?;
+-    writeln!(
+-        output,
+-        "    {}: {}  {}: {}  {}: {}  {}: {}",
+-        key!("numbers"),
+-        number!(s.kinds[3]),
+-        key!("booleans"),
+-        number!(s.kinds[4]),
+-        key!("nulls"),
+-        number!(s.kinds[5]),
+-        key!("keys"),
+-        number!(s.kinds[6])
+-    )?;
+-    writeln!(
+-        output,
+-        "  {}: {} {}",
+-        key!("depth"),
+-        key!("max"),
+-        number!(s.max_depth)
+-    )?;
+-    writeln!(
+-        output,
+-        "    {}: {}  {}: {}  {}: {}  {}: {}  {}: {}  {}: {}",
+-        key!("0"),
+-        number!(s.depths[0]),
+-        key!("1"),
+-        number!(s.depths[1]),
+-        key!("2"),
+-        number!(s.depths[2]),
+-        key!("3"),
+-        number!(s.depths[3]),
+-        key!("4"),
+-        number!(s.depths[4]),
+-        key!("5+"),
+-        number!(s.depths[5])
+-    )?;
+-    writeln!(
+-        output,
+-        "  {}: {} confirmed-output bytes discarded",
+-        key!("recovery"),
+-        number!(metrics.discarded_bytes)
+-    )?;
+-    if styled {
+-        write!(output, "{white:#}")?;
++    for (name, label, value) in [
++        ("candidates_started", "candidates started", metrics.started),
++        (
++            "candidates_completed",
++            "candidates completed",
++            metrics.completed,
++        ),
++        ("candidates_invalid", "candidates invalid", metrics.invalid),
++        (
++            "candidates_recovered",
++            "candidates recovered",
++            metrics.recovered,
++        ),
++        (
++            "errors",
++            "errors",
++            metrics.recovered.saturating_add(u64::from(result.is_err())),
++        ),
++        ("errors_recovered", "errors recovered", metrics.recovered),
++        (
++            "errors_terminal",
++            "errors terminal",
++            u64::from(result.is_err()),
++        ),
++        ("values", "values (completed candidates)", total),
++        ("objects", "objects", s.kinds[0]),
++        ("arrays", "arrays", s.kinds[1]),
++        ("strings", "strings", s.kinds[2]),
++        ("numbers", "numbers", s.kinds[3]),
++        ("booleans", "booleans", s.kinds[4]),
++        ("nulls", "nulls", s.kinds[5]),
++        ("keys", "keys", s.kinds[6]),
++        ("max_depth", "maximum value depth", s.max_depth),
++        ("depth_0", "values at depth 0", s.depths[0]),
++        ("depth_1", "values at depth 1", s.depths[1]),
++        ("depth_2", "values at depth 2", s.depths[2]),
++        ("depth_3", "values at depth 3", s.depths[3]),
++        ("depth_4", "values at depth 4", s.depths[4]),
++        ("depth_5_plus", "values at depth 5+", s.depths[5]),
++    ] {
++        let readable = if value < 1000 {
++            value.to_string()
++        } else {
++            format!(
++                "{} ({value})",
++                quantity(value as f64, &["", "k", "M", "G", "T", "P", "E"], 1000.0)
++            )
++        };
++        add(name, label, value.to_string(), readable);
++    }
++    add(
++        "discarded_bytes",
++        "confirmed output discarded",
++        metrics.discarded_bytes.to_string(),
++        bytes(metrics.discarded_bytes),
++    );
++
++    match format {
++        SummaryFormat::Json => {
++            // Status is one of three fixed ASCII strings; keys are fixed identifiers.
++            write!(output, "{{\"status\":\"{status}\"")?;
++            for field in &fields {
++                write!(output, ",\"{}\":{}", field.name, field.literal)?;
++            }
++            writeln!(output, "}}")?;
++        }
++        SummaryFormat::Flon => {
++            writeln!(output, "summary = {{}};\nsummary.status = \"{status}\";")?;
++            for field in &fields {
++                writeln!(output, "summary.{} = {};", field.name, field.literal)?;
++            }
++        }
++        SummaryFormat::Text => {
++            let title = "FLON processing summary";
++            // All labels are ASCII; µ is a single visible column. No ANSI bytes
++            // participate in this calculation.
++            let width = fields
++                .iter()
++                .map(|field| field.label.chars().count() + 2 + field.readable.chars().count())
++                .chain([title.len(), "status: ".len() + status.len()])
++                .max()
++                .unwrap();
++            let white = anstyle::AnsiColor::White.on_default();
++            if styled {
++                write!(output, "{white}")?;
++            }
++            writeln!(output, "\n{}\n{title}", "=".repeat(width))?;
++            let label_style = anstyle::AnsiColor::Blue.on_default();
++            let number_style = anstyle::Ansi256Color(208).on_default();
++            let status_style = if result.is_err() {
++                anstyle::AnsiColor::Red.on_default()
++            } else {
++                white
++            };
++            writeln!(
++                output,
++                "{}: {}",
++                SummaryToken {
++                    value: "status",
++                    style: label_style,
++                    styled
++                },
++                SummaryToken {
++                    value: status,
++                    style: status_style,
++                    styled
++                }
++            )?;
++            for field in &fields {
++                writeln!(
++                    output,
++                    "{}: {}",
++                    SummaryToken {
++                        value: field.label,
++                        style: label_style,
++                        styled
++                    },
++                    SummaryToken {
++                        value: &field.readable,
++                        style: number_style,
++                        styled
++                    }
++                )?;
++            }
++            writeln!(output, "{}", "-".repeat(width))?;
++            if styled {
++                write!(output, "{white:#}")?;
++            }
++            writeln!(output)?;
++        }
+     }
+     output.flush()
+ }
+diff --git a/src/summary_tests.rs b/src/summary_tests.rs
+index 567c6b8..80d5da4 100644
+--- a/src/summary_tests.rs
++++ b/src/summary_tests.rs
+@@ -129,9 +129,10 @@ fn exact_plain_summary_and_styled_equivalence() {
+     };
+     let mut plain = Vec::new();
+     write_summary(&mut plain, Duration::from_secs(2), &Ok(()), &metrics, false).unwrap();
++    let body = "FLON processing summary\nstatus: completed\nelapsed: 2.00 s (2000000000 ns)\ninput: 20.00 B (20 bytes)\noutput: 30.00 B (30 bytes)\ninput throughput: 10.00 B/s (10 bytes/s)\ncandidates started: 2\ncandidates completed: 1\ncandidates invalid: 1\ncandidates recovered: 1\nerrors: 1\nerrors recovered: 1\nerrors terminal: 0\nvalues (completed candidates): 0\nobjects: 0\narrays: 0\nstrings: 0\nnumbers: 0\nbooleans: 0\nnulls: 0\nkeys: 0\nmaximum value depth: 0\nvalues at depth 0: 0\nvalues at depth 1: 0\nvalues at depth 2: 0\nvalues at depth 3: 0\nvalues at depth 4: 0\nvalues at depth 5+: 0\nconfirmed output discarded: 0.00 B (0 bytes)\n";
+     assert_eq!(
+         String::from_utf8_lossy(&plain),
+-        "flon: completed in 2.000s\n  input: 20 bytes (10 bytes/s)\n  output: 30 bytes\n  candidates: 2 started, 1 completed, 1 invalid, 1 recovered\n  errors: 1 (1 recovered, 0 terminal)\n  values: 0 (completed candidates)\n    objects: 0  arrays: 0  strings: 0\n    numbers: 0  booleans: 0  nulls: 0  keys: 0\n  depth: max 0\n    0: 0  1: 0  2: 0  3: 0  4: 0  5+: 0\n  recovery: 0 confirmed-output bytes discarded\n"
++        format!("\n{}\n{body}{}\n\n", "=".repeat(44), "-".repeat(44))
+     );
+     let mut stripped = Vec::new();
+     write_summary(
+@@ -146,7 +147,7 @@ fn exact_plain_summary_and_styled_equivalence() {
+     let mut styled = Vec::new();
+     write_summary(&mut styled, Duration::ZERO, &Ok(()), &metrics, true).unwrap();
+     assert!(styled.starts_with(b"\x1b["));
+-    assert!(styled.ends_with(b"\x1b[0m"));
++    assert!(styled.ends_with(b"\x1b[0m\n"));
+ }
+ 
+ struct Failure;
+@@ -162,30 +163,35 @@ impl Write for Failure {
+ #[test]
+ fn summaries_preserve_processing_errors_and_disabled_is_silent() {
+     for kind in [io::ErrorKind::InvalidData, io::ErrorKind::BrokenPipe] {
+-        let error = run(true, Failure, false, |_| {
++        let error = run(true, Failure, false, SummaryFormat::Text, |_| {
+             Err(io::Error::new(kind, "original"))
+         })
+         .unwrap_err();
+         assert_eq!(error.kind(), kind);
+         assert_eq!(error.to_string(), "original");
+         let mut text = Vec::new();
+-        run(true, &mut text, false, |_| Err(io::Error::from(kind))).unwrap_err();
++        run(true, &mut text, false, SummaryFormat::Text, |_| {
++            Err(io::Error::from(kind))
++        })
++        .unwrap_err();
+         let text = String::from_utf8(text).unwrap();
+         assert!(text.contains(if kind == io::ErrorKind::BrokenPipe {
+             "pipe closed"
+         } else {
+             "failed"
+         }));
+-        assert!(text.contains("errors: 1 (0 recovered, 1 terminal)"));
++        assert!(text.contains("errors: 1\nerrors recovered: 0\nerrors terminal: 1\n"));
+         assert!(!text.contains("NaN"));
+     }
+     assert_eq!(
+-        run(true, Failure, false, |_| Ok(())).unwrap_err().kind(),
++        run(true, Failure, false, SummaryFormat::Text, |_| Ok(()))
++            .unwrap_err()
++            .kind(),
+         io::ErrorKind::PermissionDenied
+     );
+     let mut text = Vec::new();
+     let mut calls = 0;
+-    run(false, &mut text, false, |_| {
++    run(false, &mut text, false, SummaryFormat::Text, |_| {
+         calls += 1;
+         Ok(())
+     })
+@@ -326,19 +332,44 @@ fn summary_handles_partial_writes_empty_input_and_long_durations() {
+             Ok(())
+         }
+     }
+-    for duration in [
+-        Duration::ZERO,
+-        Duration::from_millis(1234),
+-        Duration::from_secs(3601),
++    for format in [
++        SummaryFormat::Text,
++        SummaryFormat::Json,
++        SummaryFormat::Flon,
+     ] {
+-        let mut expected = Vec::new();
+-        let mut partial = Partial(Vec::new());
+-        write_summary(&mut expected, duration, &Ok(()), &Metrics::default(), false).unwrap();
+-        write_summary(&mut partial, duration, &Ok(()), &Metrics::default(), false).unwrap();
+-        assert_eq!(expected, partial.0);
+-        let text = String::from_utf8(expected).unwrap();
+-        assert!(text.contains("input: 0 bytes (0 bytes/s)"));
+-        assert!(!text.contains("NaN"));
++        for duration in [
++            Duration::ZERO,
++            Duration::from_millis(1234),
++            Duration::from_secs(3601),
++        ] {
++            let mut expected = Vec::new();
++            let mut partial = Partial(Vec::new());
++            write_formatted_summary(
++                &mut expected,
++                duration,
++                &Ok(()),
++                &Metrics::default(),
++                false,
++                format,
++            )
++            .unwrap();
++            write_formatted_summary(
++                &mut partial,
++                duration,
++                &Ok(()),
++                &Metrics::default(),
++                false,
++                format,
++            )
++            .unwrap();
++            assert_eq!(expected, partial.0);
++            let text = String::from_utf8(expected).unwrap();
++            if format == SummaryFormat::Text {
++                assert!(text.contains("input: 0.00 B (0 bytes)"));
++                assert!(text.contains("input throughput: 0.00 B/s (0 bytes/s)"));
++            }
++            assert!(!text.contains("NaN"));
++        }
+     }
+ }
+ 
+@@ -353,19 +384,25 @@ fn enabled_work_runs_once_and_summary_flush_failures_propagate() {
+             Err(io::ErrorKind::PermissionDenied.into())
+         }
+     }
+-    let mut calls = 0;
+-    let error = run(true, FlushFailure, false, |_| {
+-        calls += 1;
+-        Ok(())
+-    })
+-    .unwrap_err();
+-    assert_eq!(calls, 1);
+-    assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
+-    let error = run(true, FlushFailure, false, |_| {
+-        Err(io::ErrorKind::InvalidData.into())
+-    })
+-    .unwrap_err();
+-    assert_eq!(error.kind(), io::ErrorKind::InvalidData);
++    for format in [
++        SummaryFormat::Text,
++        SummaryFormat::Json,
++        SummaryFormat::Flon,
++    ] {
++        let mut calls = 0;
++        let error = run(true, FlushFailure, false, format, |_| {
++            calls += 1;
++            Ok(())
++        })
++        .unwrap_err();
++        assert_eq!(calls, 1);
++        assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
++        let error = run(true, FlushFailure, false, format, |_| {
++            Err(io::ErrorKind::InvalidData.into())
++        })
++        .unwrap_err();
++        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
++    }
+ }
+ 
+ #[test]
+@@ -383,12 +420,16 @@ fn summary_colors_distinguish_labels_numbers_separators_and_failures() {
+     let blue = anstyle::AnsiColor::Blue.on_default();
+     let orange = anstyle::Ansi256Color(208).on_default();
+     let white = anstyle::AnsiColor::White.on_default();
+-    assert!(text.contains(&format!("{blue}input{white}: {orange}0{white} bytes (")));
+-    assert!(text.contains(&format!("{orange}1.234{white}s\n")));
++    assert!(text.contains(&format!(
++        "{blue}input{white}: {orange}0.00 B (0 bytes){white}"
++    )));
++    assert!(text.contains(&format!("{orange}1.23 s (1234000000 ns){white}\n")));
+     // Histogram depths are labels, while their counts are numeric values.
+-    assert!(text.contains(&format!("{blue}5+{white}: {orange}0{white}")));
+     assert!(text.contains(&format!(
+-        "{blue}objects{white}: {orange}0{white}  {blue}arrays"
++        "{blue}values at depth 5+{white}: {orange}0{white}"
++    )));
++    assert!(text.contains(&format!(
++        "{blue}objects{white}: {orange}0{white}\n{blue}arrays"
+     )));
+     for kind in [io::ErrorKind::InvalidData, io::ErrorKind::BrokenPipe] {
+         let mut output = Vec::new();
+@@ -438,3 +479,185 @@ fn candidate_limits_are_reported_without_committing_invalid_structure() {
+         assert_eq!(metrics.discarded_bytes > 0, mode == "confirmed");
+     }
+ }
++
++#[test]
++fn machine_formats_have_exact_fixtures_and_ignore_color() {
++    let expected = concat!(
++        "{\"status\":\"completed\",\"elapsed_ns\":2000000000,\"input_bytes\":20,",
++        "\"output_bytes\":30,\"input_bytes_per_second\":10,",
++        "\"candidates_started\":2,\"candidates_completed\":1,\"candidates_invalid\":1,",
++        "\"candidates_recovered\":1,\"errors\":1,\"errors_recovered\":1,\"errors_terminal\":0,",
++        "\"values\":0,\"objects\":0,\"arrays\":0,\"strings\":0,\"numbers\":0,\"booleans\":0,",
++        "\"nulls\":0,\"keys\":0,\"max_depth\":0,\"depth_0\":0,\"depth_1\":0,\"depth_2\":0,",
++        "\"depth_3\":0,\"depth_4\":0,\"depth_5_plus\":0,\"discarded_bytes\":0}\n"
++    );
++    let metrics = Metrics {
++        input_bytes: 20,
++        output_bytes: 30,
++        started: 2,
++        completed: 1,
++        invalid: 1,
++        recovered: 1,
++        ..Metrics::default()
++    };
++    let mut json = Vec::new();
++    write_formatted_summary(
++        &mut json,
++        Duration::from_secs(2),
++        &Ok(()),
++        &metrics,
++        true,
++        SummaryFormat::Json,
++    )
++    .unwrap();
++    assert_eq!(json, expected.as_bytes());
++    // The actual formatter independently checks JSON syntax, assignments, and values.
++    let formatted = flon::format(json.as_slice(), Vec::new()).unwrap();
++    let expected_flon = String::from_utf8(formatted)
++        .unwrap()
++        .replace("json", "summary");
++    for styled in [false, true] {
++        let mut output = Vec::new();
++        write_formatted_summary(
++            &mut output,
++            Duration::from_secs(2),
++            &Ok(()),
++            &metrics,
++            styled,
++            SummaryFormat::Flon,
++        )
++        .unwrap();
++        assert_eq!(output, expected_flon.as_bytes());
++    }
++}
++
++#[test]
++fn literal_values_survive_large_counts_and_long_durations() {
++    let metrics = Metrics {
++        input_bytes: u64::MAX,
++        output_bytes: u64::MAX,
++        completed: u64::MAX,
++        recovered: u64::MAX,
++        ..Metrics::default()
++    };
++    let duration = Duration::new(u64::MAX, 999_999_999);
++    for format in [
++        SummaryFormat::Text,
++        SummaryFormat::Json,
++        SummaryFormat::Flon,
++    ] {
++        let mut output = Vec::new();
++        write_formatted_summary(
++            &mut output,
++            duration,
++            &Err(io::ErrorKind::InvalidData.into()),
++            &metrics,
++            false,
++            format,
++        )
++        .unwrap();
++        let text = String::from_utf8(output).unwrap();
++        assert!(text.contains("18446744073709551615"));
++        assert!(text.contains("18446744073709551615999999999"));
++        assert!(!text.contains("NaN"));
++        assert!(!text.contains("inf"));
++        if format == SummaryFormat::Json {
++            assert!(text.contains("\"errors\":18446744073709551615"));
++            flon::format(text.as_bytes(), Vec::new()).unwrap();
++        }
++    }
++}
++
++#[test]
++fn text_quantities_and_borders_cover_unit_boundaries() {
++    for (bytes, human) in [
++        (0, "0.00 B"),
++        (1023, "1023.00 B"),
++        (1024, "1.00 KiB"),
++        (1048576, "1.00 MiB"),
++        (1073741824, "1.00 GiB"),
++    ] {
++        let metrics = Metrics {
++            input_bytes: bytes,
++            completed: 1234567,
++            ..Metrics::default()
++        };
++        for duration in [
++            Duration::ZERO,
++            Duration::from_nanos(1),
++            Duration::from_micros(1),
++            Duration::from_millis(1),
++            Duration::from_secs(60),
++            Duration::from_secs(3600),
++        ] {
++            let mut output = Vec::new();
++            write_summary(&mut output, duration, &Ok(()), &metrics, false).unwrap();
++            let text = String::from_utf8(output).unwrap();
++            assert!(text.starts_with('\n') && text.ends_with("\n\n"));
++            assert!(text.contains(&format!("input: {human} ({bytes} bytes)")));
++            assert!(text.contains("candidates completed: 1.23 M (1234567)"));
++            let lines: Vec<_> = text.lines().collect();
++            let width = lines[1].len();
++            assert!(lines[1].bytes().all(|b| b == b'='));
++            let footer = lines[lines.len() - 2];
++            assert_eq!(footer, "-".repeat(width));
++            assert_eq!(
++                lines[2..lines.len() - 2]
++                    .iter()
++                    .map(|line| line.chars().count())
++                    .max(),
++                Some(width)
++            );
++        }
++    }
++}
++
++#[test]
++fn each_format_preserves_statuses_and_writer_errors() {
++    for format in [
++        SummaryFormat::Text,
++        SummaryFormat::Json,
++        SummaryFormat::Flon,
++    ] {
++        for (kind, status) in [
++            (io::ErrorKind::InvalidData, "failed"),
++            (io::ErrorKind::BrokenPipe, "pipe closed"),
++        ] {
++            let mut output = Vec::new();
++            run(true, &mut output, true, format, |_| {
++                Err(io::Error::new(kind, "original"))
++            })
++            .unwrap_err();
++            assert!(String::from_utf8(output).unwrap().contains(status));
++            let err = run(true, Failure, false, format, |_| {
++                Err(io::Error::new(kind, "original"))
++            })
++            .unwrap_err();
++            assert_eq!(err.kind(), kind);
++            assert_eq!(err.to_string(), "original");
++        }
++        assert_eq!(
++            run(true, Failure, false, format, |_| Ok(()))
++                .unwrap_err()
++                .kind(),
++            io::ErrorKind::PermissionDenied
++        );
++        let mut output = Vec::new();
++        run(false, &mut output, false, format, |_| Ok(())).unwrap();
++        assert!(output.is_empty());
++        let mut zero = Vec::new();
++        write_formatted_summary(
++            &mut zero,
++            Duration::ZERO,
++            &Ok(()),
++            &Metrics::default(),
++            false,
++            format,
++        )
++        .unwrap();
++        assert!(!String::from_utf8_lossy(&zero).contains("NaN"));
++        if format == SummaryFormat::Json {
++            flon::format(zero.as_slice(), Vec::new()).unwrap();
++        }
++    }
++}

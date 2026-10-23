@@ -1,0 +1,15 @@
+[
+  "/home/joel/sandboxed/workspaces/rust-utilities/repos/flon/target/release/flon",
+  "--color",
+  "never",
+  "--no-summary",
+  "--output-mode",
+  "confirmed",
+  "--confirmed-memory",
+  "64KiB",
+  "--confirmed-limit",
+  "unlimited",
+  "--spool-directory",
+  "/tmp/flon-perf-uulb9gxu",
+  "/home/joel/sandboxed/workspaces/rust-utilities/repos/flon/target/perf-250mib-q1f_h13e/string-1024-hash.json"
+]

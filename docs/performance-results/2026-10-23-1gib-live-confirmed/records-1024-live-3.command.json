@@ -1,0 +1,14 @@
+[
+  "/usr/bin/time",
+  "-f",
+  "{\"elapsed_seconds\":%e,\"peak_rss_kib\":%M,\"exit_status\":%x}",
+  "-o",
+  "/home/joel/sandboxed/workspaces/rust-utilities/repos/flon/target/perf-1gib-25k_7zis/records-1024-live-3.time",
+  "/home/joel/sandboxed/workspaces/rust-utilities/repos/flon/target/release/flon",
+  "--color",
+  "never",
+  "--no-summary",
+  "--output-mode",
+  "live",
+  "/home/joel/sandboxed/workspaces/rust-utilities/repos/flon/target/perf-1gib-25k_7zis/records-1024.json"
+]

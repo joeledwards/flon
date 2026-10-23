@@ -1,0 +1,9 @@
+[
+  "/home/joel/sandboxed/workspaces/rust-utilities/repos/flon/target/release/flon",
+  "--color",
+  "never",
+  "--no-summary",
+  "--output-mode",
+  "live",
+  "/home/joel/sandboxed/workspaces/rust-utilities/repos/flon/target/perf-1gib-25k_7zis/string-1.json"
+]

@@ -1,0 +1,15 @@
+[
+  "/home/joel/sandboxed/workspaces/rust-utilities/repos/flon/target/release/flon",
+  "--color",
+  "never",
+  "--no-summary",
+  "--output-mode",
+  "confirmed",
+  "--confirmed-memory",
+  "64KiB",
+  "--confirmed-limit",
+  "unlimited",
+  "--spool-directory",
+  "/tmp/flon-perf-2p_8gwf5",
+  "/home/joel/sandboxed/workspaces/rust-utilities/repos/flon/target/perf-1gib-25k_7zis/string-1.json"
+]

@@ -135,3 +135,42 @@ Comparison with previous version (same host, parameters and timing method):
 Missing cases and reasons:
 Known limitations:
 ```
+
+
+## 2026-10-23 — completed live and confirmed matrices
+
+Two developer-run campaigns completed with script exit 0; all four
+live/confirmed output comparisons passed in each campaign. Raw metadata,
+commands, individual timing rows, executable/input hashes and comparisons are
+retained; generated fixtures are excluded. Both predate the registry dependency
+switch, so they measure the local parser builds captured in their metadata.
+
+| Input / candidates | 250 MiB live median MiB/s | 1 GiB live median MiB/s | 1 GiB confirmed median MiB/s |
+| --- | ---: | ---: | ---: |
+| Records / 1 | 61.12 | 60.13 | 3.24 |
+| Records / 1,024 | 61.43 | 60.74 | 3.37 |
+| Giant string / 1 | 109.65 | 108.94 | 100.89 |
+| Giant string / 1,024 | 108.23 | 108.70 | 101.59 |
+
+Three measured repetitions per case. [250 MiB summary](performance-results/2026-10-23-250mib-live/summary.txt)
+and [1 GiB summary](performance-results/2026-10-23-1gib-live-confirmed/summary.txt)
+retain wall-time and RSS ranges. Across these cases process peak RSS remained
+roughly 2.5–2.75 MiB. Timing excludes separate output comparisons and generation.
+The 250 MiB campaign checks output on separate 1 MiB fixtures; the earlier 1 GiB
+campaign checks full-size output. Forced confirmed spill used 64 KiB memory and
+unlimited candidate storage. No claim of durable-storage throughput is made.
+
+Confirmed records took median 316.45 s (one candidate) / 303.89 s (1,024),
+versus live 17.03 / 16.86 s. Confirmed giant strings took 10.15 / 10.08 s,
+versus live 9.40 / 9.42 s. This is a substantial workload-dependent slowdown,
+not hash collection time. Code inspection shows the spill file receives each
+formatter fragment through unbuffered File::write_all; record formatting makes
+many small writes. This is a plausible cause to investigate, not a measured
+syscall profile or a verified optimization. Do not hide it by reducing the
+correctness fixture size. A buffered spill path would require regression tests
+for delayed storage errors, commit flush, discard and cleanup.
+
+Still open: deep/active-key and varied long-lived FLON behavior, any justified
+remaining storage/recovery measurements, legacy/Rust equivalent-output checks,
+and explicit reasons for omitted larger stress cases. These results do not
+complete all release gates or establish comparative speedups.

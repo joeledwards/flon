@@ -1,0 +1,43 @@
+ M README.md
+ M ROADMAP.md
+ M docs/api-stability.md
+ M docs/performance-results.md
+ M docs/performance.md
+ M docs/test-coverage.md
+ M src/main.rs
+ M src/output_tests.rs
+ M src/summary.rs
+ M src/summary_tests.rs
+?? docs/performance-results/2026-10-23-1.0.0-1cd5d96-live-baseline/Cargo.lock
+?? docs/performance-results/2026-10-23-1.0.0-1cd5d96-live-baseline/Cargo.toml
+?? docs/performance-results/2026-10-23-1.0.0-1cd5d96-live-baseline/build.command
+?? docs/performance-results/2026-10-23-1.0.0-1cd5d96-live-baseline/build.exit
+?? docs/performance-results/2026-10-23-1.0.0-1cd5d96-live-baseline/build.stderr
+?? docs/performance-results/2026-10-23-1.0.0-1cd5d96-live-baseline/build.stdout
+?? docs/performance-results/2026-10-23-1.0.0-1cd5d96-live-baseline/flon.diff
+?? docs/performance-results/2026-10-23-1.0.0-1cd5d96-live-baseline/flon.sha256
+?? docs/performance-results/2026-10-23-1.0.0-1cd5d96-live-baseline/generator.command
+?? docs/performance-results/2026-10-23-1.0.0-1cd5d96-live-baseline/generator.exit
+?? docs/performance-results/2026-10-23-1.0.0-1cd5d96-live-baseline/generator.stderr
+?? docs/performance-results/2026-10-23-1.0.0-1cd5d96-live-baseline/generator.time
+?? docs/performance-results/2026-10-23-1.0.0-1cd5d96-live-baseline/input.sha256
+?? docs/performance-results/2026-10-23-1.0.0-1cd5d96-live-baseline/live-1.command
+?? docs/performance-results/2026-10-23-1.0.0-1cd5d96-live-baseline/live-1.exit
+?? docs/performance-results/2026-10-23-1.0.0-1cd5d96-live-baseline/live-1.stderr
+?? docs/performance-results/2026-10-23-1.0.0-1cd5d96-live-baseline/live-1.stdout
+?? docs/performance-results/2026-10-23-1.0.0-1cd5d96-live-baseline/live-1.time
+?? docs/performance-results/2026-10-23-1.0.0-1cd5d96-live-baseline/live-2.command
+?? docs/performance-results/2026-10-23-1.0.0-1cd5d96-live-baseline/live-2.exit
+?? docs/performance-results/2026-10-23-1.0.0-1cd5d96-live-baseline/live-2.stderr
+?? docs/performance-results/2026-10-23-1.0.0-1cd5d96-live-baseline/live-2.stdout
+?? docs/performance-results/2026-10-23-1.0.0-1cd5d96-live-baseline/live-2.time
+?? docs/performance-results/2026-10-23-1.0.0-1cd5d96-live-baseline/live-3.command
+?? docs/performance-results/2026-10-23-1.0.0-1cd5d96-live-baseline/live-3.exit
+?? docs/performance-results/2026-10-23-1.0.0-1cd5d96-live-baseline/live-3.stderr
+?? docs/performance-results/2026-10-23-1.0.0-1cd5d96-live-baseline/live-3.stdout
+?? docs/performance-results/2026-10-23-1.0.0-1cd5d96-live-baseline/live-3.time
+?? docs/performance-results/2026-10-23-1.0.0-1cd5d96-live-baseline/metadata.txt
+?? docs/performance-results/2026-10-23-1.0.0-1cd5d96-live-baseline/parser.diff
+?? docs/performance-results/2026-10-23-1.0.0-1cd5d96-live-baseline/rust-toolchain.toml
+?? docs/performance-results/2026-10-23-1.0.0-1cd5d96-live-baseline/script.exit
+?? docs/summary.md
