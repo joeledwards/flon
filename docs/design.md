@@ -177,7 +177,22 @@ without corrupting the assignment stream.
 The library writes to any `std::io::Write`. A convenience function may read
 from any `std::io::Read` using a bounded input buffer.
 
-Output buffering is selected outside the formatter, normally with `BufWriter`.
+Output buffering is selected outside the formatter. The CLI defaults to
+`--buffering=buffered`, an 8 KiB `BufWriter`. `--buffering=immediate` uses a
+bounded line buffer and explicitly flushes the destination after each completed
+line, including lines copied from confirmed storage. `--no-buffer` and `-B` are
+aliases for immediate mode and conflict with an explicit `--buffering` option.
+Profiles do not change this policy. Effective configuration includes it.
+
+Buffering controls delivery, while live/confirmed controls candidate validity.
+Immediate confirmed output remains invisible until candidate completion; it
+then flushes the released lines. Long partial lines can be delivered before a
+newline as the buffer fills. On successful EOF both policies explicitly flush
+remaining output, including any live partial scalar retained after skip
+recovery. Flush failures propagate through ordinary I/O error handling; broken
+pipes remain successful early termination at the CLI entry point. Immediate
+mode trades throughput for completed-line visibility. Downstream programs may
+still apply their own buffering.
 The CLI must treat a downstream closed pipe as normal successful termination;
 this is essential when output is consumed by tools such as `head` or `grep`.
 

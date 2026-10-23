@@ -46,7 +46,7 @@ implemented/verified work.
 - [x] Semantic styles with `anstyle` and destination adaptation with `anstream`
 - [x] Auto/always/never color, no-color alias, and documented environment policy
 - [x] Resolve destination color before formatting and confirmed-buffer accounting
-- [ ] Add explicit buffered/immediate output selection (distinct from
+- [x] Add explicit buffered/immediate output selection (distinct from
       live/confirmed candidate validity); define and test flushing behavior
 - [ ] Add optional elapsed-time summaries on stderr
 - [ ] Decide and document whether URL input is in 1.0 scope; if retained,

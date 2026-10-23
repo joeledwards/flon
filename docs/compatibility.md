@@ -97,7 +97,7 @@ The initial Rust CLI should provide equivalents for the high-value Node flags:
 
 - file input;
 - color disablement and explicit color choice;
-- buffered versus immediate output; and
+- buffered versus immediate output (`--buffering`, `--no-buffer`/`-B`); and
 - optional elapsed-time summary.
 
 URL input and disabling TLS certificate validation require a deliberate safety

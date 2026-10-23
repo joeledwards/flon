@@ -88,6 +88,20 @@ Live output with invalid candidates treated as errors is the default. Use
   example.json
 ```
 
+Output uses an 8 KiB buffer by default. Select line flushing for interactive
+pipelines or long-lived streams:
+
+```bash
+../../scripts/with-rust cargo run -- --buffering=immediate example.json
+# Equivalent Node-compatible aliases: --no-buffer or -B
+```
+
+`--buffering=buffered|immediate` controls delivery to stdout independently of
+`--output-mode=live|confirmed`. Immediate mode flushes each completed output
+line; confirmed mode still waits for a valid complete candidate before releasing
+any assignments. Both policies flush remaining output on successful EOF.
+Partial lines may reach the destination when the bounded buffer fills.
+
 Nesting is limited to 1,000 open containers by default, counting the root as
 depth one. Use `--max-depth N` to select a positive limit. Exceeding it follows
 the selected invalid-candidate policy.

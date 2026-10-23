@@ -1,7 +1,7 @@
 use std::env;
 use std::ffi::OsStr;
 use std::fs::File;
-use std::io::{self, BufWriter, IsTerminal, Read, Write};
+use std::io::{self, IsTerminal, Read, Write};
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -16,8 +16,14 @@ use json_skimmer::Parser;
 
 const INFINITE_MEMORY_BYTES: u64 = 512 * 1024 * 1024;
 
+mod output;
+use output::OutputWriter;
+
 #[cfg(test)]
 mod stream_test_support;
+
+#[cfg(test)]
+mod output_tests;
 
 #[derive(ClapParser, Debug)]
 #[command(version, about = "Stream JSON as flat, grep-friendly assignments")]
@@ -48,6 +54,14 @@ struct Cli {
     /// Write live or only after a candidate is confirmed valid.
     #[arg(long, value_enum)]
     output_mode: Option<OutputModeArg>,
+
+    /// Buffer output for throughput or flush each completed line (default: buffered).
+    #[arg(long, value_enum, conflicts_with = "no_buffer")]
+    buffering: Option<Buffering>,
+
+    /// Flush each completed line (alias for --buffering=immediate).
+    #[arg(long, short = 'B', conflicts_with = "buffering")]
+    no_buffer: bool,
 
     /// Bytes retained in memory before confirmed output spills to a file.
     #[arg(long, value_parser = parse_size)]
@@ -106,6 +120,12 @@ enum OutputModeArg {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+enum Buffering {
+    Buffered,
+    Immediate,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
 enum Diagnostics {
     Stderr,
     Quiet,
@@ -140,6 +160,7 @@ struct EffectiveConfig {
     formatter: Config,
     diagnostics: Diagnostics,
     color: ColorChoice,
+    buffering: Buffering,
 }
 
 fn main() -> ExitCode {
@@ -171,8 +192,16 @@ fn run(cli: Cli) -> io::Result<()> {
 
     let stream_choice = effective.color.stream_choice(is_terminal);
     let output = AutoStream::new(stdout.lock(), stream_choice);
-    let output = BufWriter::new(output);
-    let mut output = format_stream(&mut input, output, effective)?;
+    write_stream(&mut input, output, effective)
+}
+
+fn write_stream<R: Read, W: Write>(
+    input: R,
+    output: W,
+    effective: EffectiveConfig,
+) -> io::Result<()> {
+    let mut output = OutputWriter::new(output, effective.buffering);
+    format_stream(input, &mut output, effective)?;
     output.flush()
 }
 
@@ -266,6 +295,11 @@ fn resolve(cli: &Cli, is_terminal: bool) -> EffectiveConfig {
         formatter,
         diagnostics,
         color,
+        buffering: if cli.no_buffer {
+            Buffering::Immediate
+        } else {
+            cli.buffering.unwrap_or(Buffering::Buffered)
+        },
     }
 }
 
@@ -500,6 +534,7 @@ mod tests {
                     formatter,
                     diagnostics: Diagnostics::Quiet,
                     color: ColorChoice::Never,
+                    buffering: Buffering::Buffered,
                 },
             )
         });
@@ -535,6 +570,7 @@ mod tests {
                     formatter,
                     diagnostics: Diagnostics::Quiet,
                     color: ColorChoice::Never,
+                    buffering: Buffering::Buffered,
                 },
             )
         });
@@ -550,6 +586,7 @@ mod tests {
                     formatter,
                     diagnostics: Diagnostics::Quiet,
                     color: ColorChoice::Never,
+                    buffering: Buffering::Buffered,
                 },
             )
         });
