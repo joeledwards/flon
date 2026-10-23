@@ -6,7 +6,7 @@
       releases candidates containing invalid UTF-8.
 - [ ] Add configurable parser nesting limits and expose them through FLON so
       deeply nested input cannot grow parser and formatter state without bound.
-- [ ] Preserve the first formatter or writer error during EOF processing in
+- [x] Preserve the first formatter or writer error during EOF processing in
       `format_with_config`; later recovery events must not clear it. Add a
       regression test for a failing writer and truncated numeric input (`[1`).
 - [ ] Resolve automatic color against the output destination before formatting

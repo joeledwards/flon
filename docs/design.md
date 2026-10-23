@@ -195,3 +195,9 @@ Errors fall into three categories:
 Malformed candidates are expected in scanning mode and are not automatically a
 fatal library error. Strict input behavior may instead use the parser's
 single-container mode.
+
+Both stream adapters preserve the first formatter or I/O error while processing
+parser events, including EOF events. After a formatter error, subsequent events
+from that parser call are not forwarded to the formatter and cannot trigger
+recovery writes or replace the original error. Without an earlier error, EOF
+parse errors continue to follow the configured invalid-candidate policy.

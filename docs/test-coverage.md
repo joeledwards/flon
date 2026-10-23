@@ -1,7 +1,8 @@
 # Test coverage
 
 Update this matrix when public behavior changes. Library tests live in
-`src/lib.rs` and `src/contract_tests.rs`; CLI unit tests live in `src/main.rs`.
+`src/lib.rs` and `src/contract_tests.rs`; CLI unit tests live in `src/main.rs`. Shared EOF contract generators live in
+`src/eof_test_support.rs` and run against both stream adapters.
 
 | Behavior | Coverage | Remaining gaps |
 | --- | --- | --- |
@@ -11,7 +12,7 @@ Update this matrix when public behavior changes. Library tests live in
 | Key limits | Exact boundary, overflow error, suppressed scalars/subtrees, validation during skipping | Broader nested chunk combinations |
 | Confirmed storage | Invisibility before commit, exact limits, per-candidate reset, spill, discard, cleanup including every truncated prefix of representative 2/3/4-byte UTF-8 characters in keys and values at EOF, in memory and file-backed modes | Cleanup on storage failures; larger stress tests |
 | Writers | Two-byte partial writes; byte budgets; BrokenPipe, PermissionDenied, WriteZero propagation in live and confirmed modes | Actual zero-length write responses; flush failures |
-| EOF error preservation | Known regression recorded as ignored until fixed | Enable regression with fix |
+| EOF error preservation | Enabled regression; shared library/CLI checks for first-error identity, no writes after failure, all recovery policies, numeric forms, ANSI/plain output, and confirmed limits crossed at EOF in memory/file-backed modes | Broader input I/O failure coverage |
 | Color and CLI configuration | Semantic palette, explicit options, profiles, size parsing | Automatic color accounting regression; environment precedence; compiled CLI tests |
 
 Run lightweight unit tests from this repository:
@@ -20,7 +21,4 @@ Run lightweight unit tests from this repository:
 ../../scripts/with-rust cargo test --offline --lib --bin flon
 ```
 
-Ignored regressions assert desired behavior and currently fail. Run explicitly
-with `cargo test --offline --lib -- --ignored`; remove the ignore attribute when
-the corresponding fix lands. They do not count as passing coverage.
 Compiled CLI integration/e2e tests require explicit authorization.

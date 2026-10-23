@@ -15,6 +15,9 @@ use json_skimmer::Parser;
 
 const INFINITE_MEMORY_BYTES: u64 = 512 * 1024 * 1024;
 
+#[cfg(test)]
+mod eof_test_support;
+
 #[derive(ClapParser, Debug)]
 #[command(version, about = "Stream JSON as flat, grep-friendly assignments")]
 struct Cli {
@@ -326,12 +329,16 @@ fn format_stream<R: Read, W: Write>(
     }
 
     let mut error = None;
-    parser.finish(|event| match formatter.event_with_outcome(event) {
-        Ok(EventOutcome::None) => {}
-        Ok(EventOutcome::Recovered(recovery)) => {
-            report_recovery(&recovery, effective.diagnostics);
+    parser.finish(|event| {
+        if error.is_none() {
+            match formatter.event_with_outcome(event) {
+                Ok(EventOutcome::None) => {}
+                Ok(EventOutcome::Recovered(recovery)) => {
+                    report_recovery(&recovery, effective.diagnostics);
+                }
+                Err(found) => error = Some(found),
+            }
         }
-        Err(found) => error = Some(found),
     });
     if let Some(error) = error {
         return Err(error);
@@ -390,6 +397,36 @@ fn parse_size(value: &str) -> Result<u64, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn eof_policies_preserve_parse_and_confirmed_limit_errors() {
+        crate::eof_test_support::check_eof_policies(|input, formatter| {
+            format_stream(
+                input,
+                Vec::new(),
+                EffectiveConfig {
+                    formatter,
+                    diagnostics: Diagnostics::Quiet,
+                    color: ColorChoice::Never,
+                },
+            )
+        });
+    }
+
+    #[test]
+    fn eof_errors_stop_output_for_all_recovery_policies() {
+        crate::eof_test_support::check_eof_writer_errors(|input, writer, formatter| {
+            format_stream(
+                input,
+                writer,
+                EffectiveConfig {
+                    formatter,
+                    diagnostics: Diagnostics::Quiet,
+                    color: ColorChoice::Never,
+                },
+            )
+        });
+    }
 
     fn cli(arguments: &[&str]) -> Cli {
         Cli::try_parse_from(std::iter::once("flon").chain(arguments.iter().copied()))

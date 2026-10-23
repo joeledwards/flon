@@ -797,7 +797,11 @@ pub fn format_with_config<R: Read, W: Write>(
     }
 
     let mut error = None;
-    parser.finish(|event| error = formatter.event(event).err());
+    parser.finish(|event| {
+        if error.is_none() {
+            error = formatter.event(event).err();
+        }
+    });
     if let Some(error) = error {
         return Err(error);
     }
@@ -1217,3 +1221,8 @@ mod tests {
 
 #[cfg(test)]
 mod contract_tests;
+
+#[cfg(test)]
+extern crate self as flon;
+#[cfg(test)]
+mod eof_test_support;

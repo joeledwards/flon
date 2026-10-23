@@ -1,6 +1,20 @@
 use super::*;
 
 #[test]
+fn eof_policies_preserve_parse_and_confirmed_limit_errors() {
+    crate::eof_test_support::check_eof_policies(|input, config| {
+        format_with_config(input, Vec::new(), config)
+    });
+}
+
+#[test]
+fn eof_errors_stop_output_for_all_recovery_policies() {
+    crate::eof_test_support::check_eof_writer_errors(|input, writer, config| {
+        format_with_config(input, writer, config)
+    });
+}
+
+#[test]
 fn confirmed_output_discards_every_truncated_multibyte_prefix_at_eof() {
     for character in ['¢', '雪', '😀'] {
         let bytes = character.to_string().into_bytes();
@@ -53,7 +67,6 @@ fn confirmed_utf8_recovery_never_releases_invalid_bytes() {
 }
 
 #[test]
-#[ignore = "Known bug: EOF error preservation is prioritized in ROADMAP.md; enable with the fix"]
 fn eof_recovery_preserves_the_first_writer_error() {
     // The scalar prefix fits, but NumberEnd's semicolon at EOF fails.
     // The subsequent UnexpectedEnd recovery must not erase BrokenPipe.
