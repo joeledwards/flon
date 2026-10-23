@@ -174,3 +174,38 @@ Still open: deep/active-key and varied long-lived FLON behavior, any justified
 remaining storage/recovery measurements, legacy/Rust equivalent-output checks,
 and explicit reasons for omitted larger stress cases. These results do not
 complete all release gates or establish comparative speedups.
+
+
+## 2026-10-23 — buffered confirmed spill validation
+
+Developer-run 16 MiB exploratory and 64 MiB confirmation matrices passed, each
+with three repetitions for all eight timed configurations and four independent
+1 MiB live/confirmed output comparisons. Raw logs, metadata, commands and
+hashes are retained; fixtures are excluded. Builds include the uncommitted
+buffered-spill implementation on top of ce82365; saved diffs and binary hashes
+identify the measured working trees. Spool buffer capacity is 64 KiB, distinct
+from the 64 KiB candidate-memory threshold and destination buffering.
+
+| 64 MiB input / candidates | Live median MiB/s | Confirmed median MiB/s | Confirmed wall min/max (s) |
+| --- | ---: | ---: | --- |
+| Records / 1 | 62.75 | 57.14 | 1.11–1.12 |
+| Records / 1,024 | 63.37 | 58.72 | 1.08–1.10 |
+| Giant string / 1 | 104.92 | 98.46 | 0.65–0.65 |
+| Giant string / 1,024 | 104.92 | 96.97 | 0.66–0.66 |
+
+[64 MiB summary](performance-results/2026-10-23-64mib-buffered-spill/summary.txt)
+and [16 MiB summary](performance-results/2026-10-23-16mib-buffered-spill/summary.txt)
+retain full timing/RSS ranges. Peak RSS across the 64 MiB confirmed cases was
+2800–2968 KiB. Confirmed wall-time overhead versus live was approximately
+7–10% at 64 MiB. Output hashes validate only separate small fixtures, not the
+larger timed output. Equal centisecond timings reflect GNU time resolution,
+not absence of underlying variation. No cache flushing or controlled host load.
+
+The single-record 16 MiB confirmed case also measured 57.14 MiB/s; the other
+16 MiB cases are exploratory due to short timing intervals and possible
+memory-only candidates. Earlier unbuffered 1 GiB confirmed records measured
+3.24–3.37 MiB/s. The new results strongly support batching the small spill writes,
+but fixture sizes and dependency provenance differ; no precise matched-workload
+speedup factor is claimed. No new GiB confirmed campaign is required for this
+bounded optimization check. Broader deep/active-key/repeated-candidate evidence
+and legacy comparison remain separate release work.

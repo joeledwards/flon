@@ -1,0 +1,8 @@
+[
+  "git",
+  "-C",
+  "/home/joel/sandboxed/workspaces/rust-utilities/repos/flon",
+  "status",
+  "--short",
+  "--untracked-files=all"
+]

@@ -15,7 +15,10 @@ unsafe code. This is not a transitive-dependency safety audit.
 - Library defaults: plain live output, fail on invalid candidates, 64 KiB raw
   keys with error on overflow, depth 1,000 and unlimited candidate input bytes.
   Confirmed defaults: 128 MiB memory, 10 GiB generated output per candidate,
-  default temporary directory. Unlimited storage is explicit.
+  default temporary directory. Unlimited storage is explicit. File-backed
+  storage adds a fixed 64 KiB staging buffer beyond the memory threshold.
+  Buffered spool write errors can surface at commit; flushing precedes any
+  candidate release. Discard/drop abandon pending bytes without flushing.
 - Live effects are speculative and cannot be rolled back. Confirmed output
   commits only validated candidates; failure/discard/drop cleans spill storage.
   Commit may partially write before a destination failure: output is not an

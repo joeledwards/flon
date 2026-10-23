@@ -1,0 +1,21 @@
+{
+  "toolchain_bin": "/home/joel/sandboxed/workspaces/rust-utilities/.tools/rust/rustup-home/toolchains/stable-x86_64-unknown-linux-gnu/bin",
+  "fixture_mib": 16,
+  "hash_fixture_mib": 1,
+  "time_confirmed": true,
+  "repetitions": 3,
+  "seed": 42,
+  "depth": 1,
+  "scenario": "valid",
+  "escape_percent": 2,
+  "unicode_percent": 2,
+  "confirmed_memory_bytes": 65536,
+  "confirmed_limit": "unlimited",
+  "spool_directory": "/tmp/flon-perf-fn2gvupg",
+  "cache": "not flushed; newly generated input",
+  "background_load": "uncontrolled",
+  "summary": false,
+  "color": "never",
+  "stdout": "/dev/null during timing; hashed separately for correctness",
+  "flags": {}
+}

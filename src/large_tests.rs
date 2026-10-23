@@ -62,13 +62,20 @@ fn disk_full_spool_write_preserves_os_error_and_releases_no_output() {
             destination: Digest::default(),
             config: ConfirmedOutput::default(),
             candidate: CandidateBuffer::File {
-                file: OpenOptions::new().write(true).open("/dev/full").unwrap(),
+                file: crate::SpoolFile::new(
+                    OpenOptions::new().write(true).open("/dev/full").unwrap(),
+                ),
                 len: 0,
             },
         };
-        let error = output.write_all(&vec![b'x'; payload]).unwrap_err();
+        let error = if payload == 1 {
+            output.write_all(b"x").unwrap();
+            output.commit_candidate().unwrap_err()
+        } else {
+            output.write_all(&vec![b'x'; payload]).unwrap_err()
+        };
         assert_eq!(error.raw_os_error(), Some(28)); // ENOSPC on Linux
-        assert_eq!(output.discard_candidate(), (0, true));
+        assert_eq!(output.discard_candidate(), (0, payload != 1));
         assert_eq!(output.into_inner(), Digest::default());
     }
 }
@@ -108,6 +115,87 @@ fn large_spilled_candidate_cleans_up_on_truncation_limit_and_drop() {
             Parser::default().push(&input, |event| formatter.event(event).unwrap());
             drop(formatter); // Caller abandons candidate without finish().
             assert_eq!(spool.path().read_dir().unwrap().count(), 0);
+        }
+    }
+}
+
+#[test]
+fn confirmed_spill_batches_small_fragments_before_commit() {
+    use crate::{CandidateBuffer, Output};
+    let mut output = Output::new(
+        Vec::new(),
+        &OutputMode::Confirmed(ConfirmedOutput {
+            memory_threshold: 0,
+            candidate_limit: None,
+            spool_directory: None,
+        }),
+    );
+    output.begin_candidate();
+    for _ in 0..100 {
+        output.write_all(b"abc").unwrap();
+    }
+    match &output {
+        Output::Confirmed {
+            candidate: CandidateBuffer::File { file, len },
+            ..
+        } => {
+            assert_eq!(*len, 300);
+            assert_eq!(
+                file.metadata().unwrap().len(),
+                0,
+                "small writes should stay buffered"
+            );
+        }
+        _ => panic!("expected spilled candidate"),
+    }
+    output.commit_candidate().unwrap();
+    assert_eq!(output.into_inner(), b"abc".repeat(100));
+}
+
+#[test]
+fn discarded_and_dropped_spills_do_not_flush_pending_bytes() {
+    use crate::{CandidateBuffer, Output, SpoolFile};
+    for discard in [true, false] {
+        let file = tempfile::tempfile().unwrap();
+        let inspection = file.try_clone().unwrap();
+        let mut output = Output::Confirmed {
+            destination: Vec::new(),
+            config: ConfirmedOutput::default(),
+            candidate: CandidateBuffer::File {
+                file: SpoolFile::new(file),
+                len: 0,
+            },
+        };
+        output.write_all(b"unconfirmed").unwrap();
+        if discard {
+            assert_eq!(output.discard_candidate(), (11, true));
+        }
+        drop(output);
+        assert_eq!(inspection.metadata().unwrap().len(), 0);
+    }
+}
+
+#[test]
+fn confirmed_buffer_boundaries_preserve_exact_output() {
+    for size in [65_535, 65_536, 65_537] {
+        let payload = "x".repeat(size);
+        let input = format!("[\"{payload}\"]");
+        let expected = format!("json = [];\njson[0] = \"{payload}\";\n");
+        for memory_threshold in [0, 32] {
+            let output = format_with_config(
+                input.as_bytes(),
+                Vec::new(),
+                Config {
+                    output_mode: OutputMode::Confirmed(ConfirmedOutput {
+                        memory_threshold,
+                        candidate_limit: Some(expected.len() as u64),
+                        spool_directory: None,
+                    }),
+                    ..Config::default()
+                },
+            )
+            .unwrap();
+            assert_eq!(output, expected.as_bytes());
         }
     }
 }

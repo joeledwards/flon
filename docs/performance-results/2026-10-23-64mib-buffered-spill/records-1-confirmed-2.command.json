@@ -1,0 +1,20 @@
+[
+  "/usr/bin/time",
+  "-f",
+  "{\"elapsed_seconds\":%e,\"peak_rss_kib\":%M,\"exit_status\":%x}",
+  "-o",
+  "/home/joel/sandboxed/workspaces/rust-utilities/repos/flon/target/perf-64mib-wjk6szv3/records-1-confirmed-2.time",
+  "/home/joel/sandboxed/workspaces/rust-utilities/repos/flon/target/release/flon",
+  "--color",
+  "never",
+  "--no-summary",
+  "--output-mode",
+  "confirmed",
+  "--confirmed-memory",
+  "64KiB",
+  "--confirmed-limit",
+  "unlimited",
+  "--spool-directory",
+  "/tmp/flon-perf-u5rvfqwb",
+  "/home/joel/sandboxed/workspaces/rust-utilities/repos/flon/target/perf-64mib-wjk6szv3/records-1.json"
+]

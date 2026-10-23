@@ -1,0 +1,20 @@
+[
+  {
+    "elapsed_seconds": 0.25,
+    "peak_rss_kib": 2620,
+    "exit_status": 0,
+    "input_bytes": 16777216
+  },
+  {
+    "elapsed_seconds": 0.25,
+    "peak_rss_kib": 2676,
+    "exit_status": 0,
+    "input_bytes": 16777216
+  },
+  {
+    "elapsed_seconds": 0.25,
+    "peak_rss_kib": 2612,
+    "exit_status": 0,
+    "input_bytes": 16777216
+  }
+]

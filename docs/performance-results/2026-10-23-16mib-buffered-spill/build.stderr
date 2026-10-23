@@ -1,0 +1,8 @@
+   Compiling json-skimmer v1.0.0
+   Compiling flon v1.0.0 (/home/joel/sandboxed/workspaces/rust-utilities/repos/flon)
+warning: linker stderr: ignoring deprecated linker optimization setting "1"
+  |
+  = note: `#[warn(linker_messages)]` on by default
+
+warning: `flon` (bin "flon") generated 1 warning
+    Finished `release` profile [optimized] target(s) in 0.88s

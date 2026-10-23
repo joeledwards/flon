@@ -1,0 +1,9 @@
+[
+  "/home/joel/sandboxed/workspaces/rust-utilities/scripts/with-rust",
+  "env",
+  "RUSTC=/home/joel/sandboxed/workspaces/rust-utilities/.tools/rust/rustup-home/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustc",
+  "PATH=/home/joel/sandboxed/workspaces/rust-utilities/.tools/rust/rustup-home/toolchains/stable-x86_64-unknown-linux-gnu/bin:/run/user/1000/fnm_multishells/1894317_1792704331983/bin:/home/joel/rbin:/home/joel/bin:/run/user/1000/fnm_multishells/9150_1790834804556/bin:/home/joel/.cargo/bin:/home/joel/.sdkman/candidates/sbt/current/bin:/home/joel/.sdkman/candidates/java/current/bin:/home/joel/rbin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/snap/bin:/home/joel/bin:/home/joel/bin",
+  "/home/joel/sandboxed/workspaces/rust-utilities/.tools/rust/rustup-home/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustc",
+  "--version",
+  "--verbose"
+]

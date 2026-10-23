@@ -244,3 +244,9 @@ be processed past the parser's representable offset. Confirmed output for the
 unfinished candidate is discarded; previously committed output remains visible.
 Processing and writer errors stop formatting; a downstream broken pipe is a
 successful early exit only in the CLI. See [API stability](docs/api-stability.md).
+
+Confirmed spill files use an additional bounded 64 KiB write buffer to batch
+formatting fragments. This is separate from `--confirmed-memory` and the stdout
+buffer. The spool buffer is flushed before candidate output is released; disk
+errors may therefore surface at commit. Invalid/discarded candidates abandon
+pending spool bytes, and temporary files are released on discard/drop/error.
