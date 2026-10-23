@@ -62,8 +62,9 @@ replace parser internals after an error.
 `src/compatibility_tests.rs` ports all 20 distinct active input/output cases
 from `node-flon/test/unmarshal.js`; repeated assertions share one fixture. The
 Node suite was inspected read-only, not executed. Each Rust fixture checks the
-convenience API plus live and confirmed event rendering at every two-chunk
-split and in one-byte chunks. Eight additional fixtures cover empty containers,
+convenience API plus live, memory-backed confirmed, and file-backed confirmed
+event rendering at every two-chunk split, in one-byte chunks, and with 16
+fixed-seed random multi-chunk partitions. Eight additional fixtures cover empty containers,
 duplicate/escaped/Unicode keys, control escapes, exact numbers, adjacent mixed
 roots, and junk recovery. Other recovery and resource-limit cases live in the
 contract suite.
@@ -74,7 +75,8 @@ output omits the third string and places that object at index two. The Rust
 `legacy_junk_fixture_preserves_all_array_elements` test ports the full input
 with the corrected expectation: strings at indexes zero through two, then the
 object and its descendants at index three. It checks the convenience API and
-live/confirmed event rendering at every two-chunk split and in one-byte chunks.
+live/confirmed event rendering at every two-chunk split, in one-byte chunks,
+and with the same fixed-seed random partitions.
 The legacy expectation is rejected; no Rust formatter change was needed.
 
 ## Fixture matrix

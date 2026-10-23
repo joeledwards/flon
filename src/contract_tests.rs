@@ -166,7 +166,18 @@ fn exact_output_corpus_is_independent_of_chunking_and_storage() {
                 );
             }
             let singles: Vec<_> = (0..=input.len()).collect();
-            assert_eq!(render_chunks(input, config, &singles), expected.as_bytes());
+            assert_eq!(
+                render_chunks(input, config.clone(), &singles),
+                expected.as_bytes()
+            );
+            for cuts in crate::compatibility_tests::random_chunk_partitions(input.len()) {
+                assert_eq!(
+                    render_chunks(input, config.clone(), &cuts),
+                    expected.as_bytes(),
+                    "{input:?}, mode {:?}, cuts {cuts:?}",
+                    config.output_mode
+                );
+            }
         }
     }
 }

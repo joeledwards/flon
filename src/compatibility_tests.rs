@@ -118,12 +118,17 @@ fn assert_fixture(fixture: Fixture) {
     for mode in [
         OutputMode::Live,
         OutputMode::Confirmed(ConfirmedOutput {
+            memory_threshold: 0,
+            ..ConfirmedOutput::default()
+        }),
+        OutputMode::Confirmed(ConfirmedOutput {
             memory_threshold: 4096,
             ..ConfirmedOutput::default()
         }),
     ] {
         for cuts in std::iter::once((0..=input.len()).collect::<Vec<_>>())
             .chain((0..=input.len()).map(|split| vec![split]))
+            .chain(random_chunk_partitions(input.len()))
         {
             let mut parser = Parser::default();
             let mut formatter = Formatter::with_config(
@@ -213,4 +218,22 @@ fn legacy_junk_fixture_preserves_all_array_elements() {
             "json.name = \"leroy\";\n",
         ),
     ));
+}
+
+/// Fixed seeds and bounded chunk sizes keep failures reproducible without a
+/// random-number dependency. Cuts are byte offsets, including inside UTF-8.
+/// Each partition starts/ends with an empty push as well as nonempty chunks.
+pub(crate) fn random_chunk_partitions(length: usize) -> impl Iterator<Item = Vec<usize>> {
+    (1_u64..=16).map(move |seed| {
+        let mut state = seed;
+        let mut end = 0;
+        let mut cuts = vec![0];
+        while end < length {
+            state = state.wrapping_mul(6364136223846793005).wrapping_add(1);
+            let chunk_size = 1 + ((state >> 32) % 17) as usize;
+            end += chunk_size.min(length - end);
+            cuts.push(end);
+        }
+        cuts
+    })
 }
