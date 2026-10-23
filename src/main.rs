@@ -17,6 +17,7 @@ use json_skimmer::Parser;
 const INFINITE_MEMORY_BYTES: u64 = 512 * 1024 * 1024;
 
 mod output;
+mod summary;
 use output::OutputWriter;
 
 #[cfg(test)]
@@ -79,6 +80,14 @@ struct Cli {
     #[arg(long, value_enum)]
     diagnostics: Option<Diagnostics>,
 
+    /// Report processing metrics on stderr (enabled by the infinite profile).
+    #[arg(long, short = 'v', conflicts_with = "no_summary")]
+    summary: bool,
+
+    /// Disable processing summaries, including the infinite profile default.
+    #[arg(long, conflicts_with = "summary")]
+    no_summary: bool,
+
     /// When to emit terminal colors.
     #[arg(long, value_enum, conflicts_with = "no_color")]
     color: Option<ColorChoice>,
@@ -96,7 +105,7 @@ struct Cli {
 enum Profile {
     /// Live output, silent recovery, and no diagnostics.
     Wraith,
-    /// Confirmed output, unlimited spool, annotated recovery, and diagnostics.
+    /// Confirmed output, unlimited spool, annotated recovery, diagnostics, and summary.
     Infinite,
 }
 
@@ -161,6 +170,7 @@ struct EffectiveConfig {
     diagnostics: Diagnostics,
     color: ColorChoice,
     buffering: Buffering,
+    summary: bool,
 }
 
 fn main() -> ExitCode {
@@ -184,25 +194,55 @@ fn run(cli: Cli) -> io::Result<()> {
         return Ok(());
     }
 
-    let mut input: Box<dyn Read> = match cli.input.as_deref() {
-        None => Box::new(io::stdin()),
-        Some(path) if path.as_os_str() == OsStr::new("-") => Box::new(io::stdin()),
-        Some(path) => Box::new(File::open(path)?),
-    };
+    let stderr = io::stderr();
+    let summary_color = effective.color.stream_choice(stderr.is_terminal());
+    let styled = summary_color != StreamColorChoice::Never;
+    summary::run(
+        effective.summary,
+        AutoStream::new(stderr.lock(), summary_color),
+        styled,
+        |metrics| {
+            let mut input: Box<dyn Read> = match cli.input.as_deref() {
+                None => Box::new(io::stdin()),
+                Some(path) if path.as_os_str() == OsStr::new("-") => Box::new(io::stdin()),
+                Some(path) => Box::new(File::open(path)?),
+            };
 
-    let stream_choice = effective.color.stream_choice(is_terminal);
-    let output = AutoStream::new(stdout.lock(), stream_choice);
-    write_stream(&mut input, output, effective)
+            let stream_choice = effective.color.stream_choice(is_terminal);
+            let output = AutoStream::new(stdout.lock(), stream_choice);
+            write_stream_measured(&mut input, output, effective, metrics)
+        },
+    )
 }
 
+#[cfg(test)]
 fn write_stream<R: Read, W: Write>(
     input: R,
     output: W,
     effective: EffectiveConfig,
 ) -> io::Result<()> {
-    let mut output = OutputWriter::new(output, effective.buffering);
-    format_stream(input, &mut output, effective)?;
-    output.flush()
+    write_stream_measured(input, output, effective, &mut summary::Metrics::default())
+}
+
+fn write_stream_measured<R: Read, W: Write>(
+    input: R,
+    output: W,
+    effective: EffectiveConfig,
+    metrics: &mut summary::Metrics,
+) -> io::Result<()> {
+    let count = std::cell::Cell::new(0);
+    let result = {
+        let counted = summary::CountWriter {
+            inner: output,
+            count: &count,
+        };
+        let mut output = OutputWriter::new(counted, effective.buffering);
+        format_stream_measured(input, &mut output, effective, metrics)
+            .and_then(|output| output.flush())
+        // Include any final writes made when the buffering writer is dropped.
+    };
+    metrics.output_bytes = count.get();
+    result
 }
 
 fn resolve(cli: &Cli, is_terminal: bool) -> EffectiveConfig {
@@ -295,6 +335,7 @@ fn resolve(cli: &Cli, is_terminal: bool) -> EffectiveConfig {
         formatter,
         diagnostics,
         color,
+        summary: !cli.no_summary && (cli.summary || cli.profile == Some(Profile::Infinite)),
         buffering: if cli.no_buffer {
             Buffering::Immediate
         } else {
@@ -340,10 +381,20 @@ fn env_requests_color(name: &str) -> bool {
     env::var_os(name).is_some_and(|value| !value.is_empty() && value != "0")
 }
 
+#[cfg(test)]
 fn format_stream<R: Read, W: Write>(
+    input: R,
+    output: W,
+    effective: EffectiveConfig,
+) -> io::Result<W> {
+    format_stream_measured(input, output, effective, &mut summary::Metrics::default())
+}
+
+fn format_stream_measured<R: Read, W: Write>(
     mut input: R,
     output: W,
     effective: EffectiveConfig,
+    metrics: &mut summary::Metrics,
 ) -> io::Result<W> {
     let mut parser =
         Parser::with_max_depth(json_skimmer::Mode::Scan, effective.formatter.max_depth);
@@ -352,19 +403,20 @@ fn format_stream<R: Read, W: Write>(
 
     loop {
         let count = input.read(&mut buffer)?;
+        metrics.input_bytes = metrics.input_bytes.saturating_add(count as u64);
         if count == 0 {
             break;
         }
         let mut error = None;
         parser.push(&buffer[..count], |event| {
             if error.is_none() {
-                match formatter.event_with_outcome(event) {
-                    Ok(EventOutcome::None) => {}
-                    Ok(EventOutcome::Recovered(recovery)) => {
-                        report_recovery(&recovery, effective.diagnostics);
-                    }
-                    Err(found) => error = Some(found),
-                }
+                handle_event(
+                    &mut formatter,
+                    event,
+                    metrics,
+                    effective.diagnostics,
+                    &mut error,
+                );
             }
         });
         if let Some(error) = error {
@@ -375,19 +427,45 @@ fn format_stream<R: Read, W: Write>(
     let mut error = None;
     parser.finish(|event| {
         if error.is_none() {
-            match formatter.event_with_outcome(event) {
-                Ok(EventOutcome::None) => {}
-                Ok(EventOutcome::Recovered(recovery)) => {
-                    report_recovery(&recovery, effective.diagnostics);
-                }
-                Err(found) => error = Some(found),
-            }
+            handle_event(
+                &mut formatter,
+                event,
+                metrics,
+                effective.diagnostics,
+                &mut error,
+            );
         }
     });
     if let Some(error) = error {
         return Err(error);
     }
     Ok(formatter.into_inner())
+}
+
+fn handle_event<W: Write>(
+    formatter: &mut Formatter<W>,
+    event: json_skimmer::Event<'_>,
+    metrics: &mut summary::Metrics,
+    diagnostics: Diagnostics,
+    error: &mut Option<io::Error>,
+) {
+    metrics.observe(&event);
+    let complete = matches!(event, json_skimmer::Event::CandidateEnd { .. });
+    match formatter.event_with_outcome(event) {
+        Ok(EventOutcome::None) => {
+            if complete {
+                metrics.commit();
+            }
+        }
+        Ok(EventOutcome::Recovered(recovery)) => {
+            metrics.recovered = metrics.recovered.saturating_add(1);
+            metrics.discarded_bytes = metrics
+                .discarded_bytes
+                .saturating_add(recovery.discarded_output_bytes);
+            report_recovery(&recovery, diagnostics);
+        }
+        Err(found) => *error = Some(found),
+    }
 }
 
 fn report_recovery(recovery: &Recovery, diagnostics: Diagnostics) {
@@ -441,6 +519,43 @@ fn parse_size(value: &str) -> Result<u64, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn summary_defaults_aliases_and_profile_overrides() {
+        assert!(!resolve(&cli(&[])).summary);
+        assert!(!resolve(&cli(&["--profile", "wraith"])).summary);
+        assert!(resolve(&cli(&["--profile", "infinite"])).summary);
+        assert!(resolve(&cli(&["--profile", "infinite", "--diagnostics", "quiet"])).summary);
+        for flag in ["--summary", "-v"] {
+            for profile in ["wraith", "infinite"] {
+                assert!(resolve(&cli(&["--profile", profile, flag])).summary);
+            }
+        }
+        assert!(!resolve(&cli(&["--profile", "infinite", "--no-summary"])).summary);
+        assert!(Cli::try_parse_from(["flon", "--summary", "--no-summary"]).is_err());
+    }
+
+    #[test]
+    fn summaries_do_not_change_assignment_output() {
+        for args in [
+            vec!["--summary", "--color", "never"],
+            vec!["--profile", "infinite", "--color", "never"],
+        ] {
+            let config = resolve(&cli(&args));
+            let mut stdout = Vec::new();
+            let mut stderr = Vec::new();
+            summary::run(config.summary, &mut stderr, false, |metrics| {
+                write_stream_measured(b"[1]".as_slice(), &mut stdout, config, metrics)
+            })
+            .unwrap();
+            assert_eq!(stdout, b"json = [];\njson[0] = 1;\n");
+            assert!(
+                String::from_utf8(stderr)
+                    .unwrap()
+                    .starts_with("flon: completed in ")
+            );
+        }
+    }
 
     fn resolve(cli: &Cli) -> EffectiveConfig {
         super::resolve(cli, false)
@@ -535,6 +650,7 @@ mod tests {
                     diagnostics: Diagnostics::Quiet,
                     color: ColorChoice::Never,
                     buffering: Buffering::Buffered,
+                    summary: false,
                 },
             )
         });
@@ -571,6 +687,7 @@ mod tests {
                     diagnostics: Diagnostics::Quiet,
                     color: ColorChoice::Never,
                     buffering: Buffering::Buffered,
+                    summary: false,
                 },
             )
         });
@@ -587,6 +704,7 @@ mod tests {
                     diagnostics: Diagnostics::Quiet,
                     color: ColorChoice::Never,
                     buffering: Buffering::Buffered,
+                    summary: false,
                 },
             )
         });

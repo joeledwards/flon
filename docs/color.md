@@ -31,7 +31,9 @@ The initial palette follows `node-flon`:
 | Number value | Orange |
 | Boolean value | Purple |
 | Null value | Yellow |
-| Timing summary | Orange |
+| Summary labels | Blue |
+| Summary numeric values | Orange |
+| Summary separators and units | White |
 | Warning or error | Red |
 
 The palette is data supplied to the renderer. Plain and styled output must share
@@ -133,3 +135,8 @@ without depending on the test runner being attached to a terminal.
 Color policy should initially remain inside FLON. A separate Rust equivalent of
 `@buzuli/color` becomes worthwhile only after another application needs the
 same palette, environment precedence, theme handling, and capability fallback.
+
+Processing summaries resolve automatic color against stderr independently of
+stdout. Labels use blue, numeric values orange, and separators/units white;
+failed/closed-pipe status uses red.
+Explicit color options and environment precedence apply to both destinations.

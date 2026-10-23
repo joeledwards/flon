@@ -48,7 +48,10 @@ implemented/verified work.
 - [x] Resolve destination color before formatting and confirmed-buffer accounting
 - [x] Add explicit buffered/immediate output selection (distinct from
       live/confirmed candidate validity); define and test flushing behavior
-- [ ] Add optional elapsed-time summaries on stderr
+- [x] Add optional processing summaries on stderr (`--summary`/`-v`), enabled
+      by default in `infinite` with `--no-summary` override
+- [x] Expand summaries with byte/throughput, candidate/error, completed-value type
+      and depth metrics; color summaries according to the stderr destination
 - [ ] Decide and document whether URL input is in 1.0 scope; if retained,
       implement it with an explicit TLS policy and appropriate authorized tests
 

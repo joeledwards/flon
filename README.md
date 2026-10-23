@@ -77,7 +77,7 @@ Live output with invalid candidates treated as errors is the default. Use
 ../../scripts/with-rust cargo run -- --profile wraith example.json
 
 # Confirm each candidate, use unlimited file-backed overflow, annotate errors,
-# and report recoveries on stderr.
+# and report recoveries plus an processing summary on stderr.
 ../../scripts/with-rust cargo run -- --profile infinite example.json
 
 # Bounded confirmed output with explicit binary sizes.
@@ -101,6 +101,38 @@ pipelines or long-lived streams:
 line; confirmed mode still waits for a valid complete candidate before releasing
 any assignments. Both policies flush remaining output on successful EOF.
 Partial lines may reach the destination when the bounded buffer fills.
+
+Use `--summary` (or `-v`) to report processing metrics on stderr:
+
+```bash
+../../scripts/with-rust cargo run -- --summary example.json
+# infinite enables summaries by default; opt out explicitly:
+../../scripts/with-rust cargo run -- --profile infinite --no-summary example.json
+```
+
+A summary includes elapsed time, input bytes and throughput, output bytes,
+candidates started/completed/invalid/recovered, errors, value counts by JSON
+type, object-key counts, maximum value depth, and a depth histogram (0–4,
+then 5+). Root values have depth zero; keys do not count as values.
+Structural statistics include only successfully completed candidates, including
+values suppressed by key limits. Invalid or unfinished candidates contribute
+no structural counts. Scan mode recognizes object/array candidates; surrounding
+text and standalone scalars do not contribute values.
+
+Input bytes include all bytes read, including surrounding text and read-ahead
+past an error. Output bytes count successful destination writes below buffering,
+including forced ANSI styling and recovery comments, excluding discarded
+confirmed output and stderr. They do not guarantee that a final flush succeeded.
+Errors count recovered failures plus any terminal processing failure (including
+a closed pipe); invalid counts refer specifically to parser-invalid events.
+The recovery line reports discarded confirmed-output bytes.
+
+Timing covers input opening through final output flushing using a monotonic
+clock. Throughput is input bytes divided by that time. Failed runs and closed
+pipes report `failed` and `pipe closed`; stdout remains assignment-only.
+Summary colors follow the resolved color policy, with automatic color determined
+from **stderr**, independently of stdout. `--diagnostics=quiet` controls recovery
+messages independently of summaries. `--show-config` emits no summary.
 
 Nesting is limited to 1,000 open containers by default, counting the root as
 depth one. Use `--max-depth N` to select a positive limit. Exceeding it follows

@@ -41,6 +41,7 @@ fn effective(buffering: Buffering, output_mode: OutputMode) -> EffectiveConfig {
         diagnostics: Diagnostics::Quiet,
         color: ColorChoice::Never,
         buffering,
+        summary: false,
     }
 }
 

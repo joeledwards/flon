@@ -150,7 +150,8 @@ CLI profiles expand into ordinary settings rather than adding library
 behavior. `wraith` selects live output, silent invalid-candidate skipping, and
 quiet diagnostics. `infinite` selects confirmed output with a larger memory
 threshold, unlimited per-candidate spool storage, annotated skipping, and
-stderr recovery diagnostics. Explicit CLI options override profile defaults.
+stderr recovery diagnostics, and processing summaries. Explicit CLI options
+override profile defaults.
 
 ## Parser-event diagnostics
 
@@ -229,3 +230,47 @@ The CLI resolves automatic color against stdout before constructing the
 formatter. Redirected automatic output generates plain bytes, matching
 `--color=never` for confirmed-output thresholds and candidate limits. Forced
 color and automatic terminal color retain ANSI bytes in buffer accounting.
+
+## Processing summaries
+
+`--summary`/`-v` enables a stderr summary; `infinite` enables it by
+default. `--no-summary` overrides that default. Other profiles and ordinary runs
+are silent unless enabled explicitly. Summary selection is independent of
+recovery diagnostics and is included in effective configuration. `--show-config`
+returns before timing or input processing.
+
+Timing uses a monotonic clock from input opening through processing and final
+stdout flushing. The summary prints seconds with three decimal places and a
+`completed`, `failed`, or `pipe closed` outcome. A recovered stream that reaches
+successful EOF is `completed`; this does not imply all candidates were valid.
+The summary does not include its own write time and never enters FLON stdout.
+Original processing errors take precedence over summary-writing failures. If
+processing succeeded but the summary cannot be written, its I/O error is
+returned through ordinary CLI error handling.
+
+Summary counters use fixed-size storage, with one candidate-local structure
+merged only after its `CandidateEnd` event is successfully formatted. This
+excludes invalid candidates and candidates whose formatting/commit fails, but
+includes parser-observed values suppressed by formatter key limits. Completion
+can precede a later buffered write or final flush failure. Fragment events do
+not count as new values. Root values are depth zero; keys are counted separately.
+Five depth buckets cover 0–4 and a sixth aggregates 5+. Empty input reports zero
+counts and maximum depth zero. All integer counters saturate rather than wrap.
+
+The summary reports input bytes read (including junk/read-ahead), bytes accepted
+by destination writes below CLI buffering, input bytes/second over elapsed time,
+started/completed/invalid/recovered candidates, recovered plus terminal errors,
+completed-candidate value types/keys/depths, and discarded confirmed bytes.
+Parser-invalid events are counted even under fail policy; formatter/I/O failures
+can be terminal without a parser-invalid event. A terminal broken pipe counts as
+an error despite the CLI's successful exit convention. Zero elapsed time reports
+zero throughput. Output bytes include generated destination styling/comments,
+exclude stderr and discarded confirmed bytes, and do not imply flush success.
+
+Summary styling uses blue labels, orange numeric values, white separators/units,
+and red for a failing/closed-pipe status,
+with the existing explicit/environment color policy. Automatic summary color is
+resolved against stderr, independently of the stdout formatter. Plain and styled
+summaries share one renderer. Summary writes and flushes propagate errors only
+when processing itself succeeded. Scalar size extremes and spill totals remain
+future additions; they are not inferred from incomplete recovery information.
