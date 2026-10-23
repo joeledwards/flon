@@ -178,7 +178,9 @@ and redirected files remain plain. Override it explicitly when needed:
 
 ## Large JSON fixtures
 
-The companion **json-volcano** library and CLI live in their own sibling project.
+The companion [json-volcano 1.0](https://crates.io/crates/json-volcano)
+library and CLI are published independently. Tests use its crates.io library
+with `default-features = false`, without a generator runtime dependency.
 It streams exact-size fixtures with bounded memory, including giant candidates,
 multiple roots, late errors, and truncated input. See the
 [generator guide](docs/json-generator.md) for build commands, options and
@@ -199,8 +201,9 @@ separate FLON timing. The generator is not shipped with FLON.
 
 ## Release plan
 
-The target is a coordinated 1.0.0 release with `json-skimmer`.
-The parser publishes first, then FLON uses that published dependency. Core
-features and release gates are tracked in [the release roadmap](ROADMAP.md);
-convenience features are candidates for later 1.x releases, with breaking
-changes reviewed for 2.0. No release dates are assigned.
+Publish initial **0.1.0** releases, json-skimmer first and FLON second. This
+makes the current streaming core available while its APIs are still pre-1.0.
+The 1.0 stability and validation gates remain tracked in the [roadmap](ROADMAP.md).
+See [release instructions](docs/releasing.md) for package checks, publication
+order and remaining limitations. Convenience adapters are later 1.x candidates;
+no release dates are assigned.

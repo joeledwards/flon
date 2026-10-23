@@ -18,14 +18,17 @@ failures remain gaps.
 
 ## Per-version checklist
 
-Before each released version, run the checks below manually and append results
+For the 1.0 release and subsequent versions, run the checks below manually and append results
 to the [performance results log](performance-results.md). This is a release
 checklist, not an automatic CI job. Keep release gates open until required
-cases are recorded; label exploratory or incomplete runs explicitly.
+cases are recorded; label exploratory or incomplete runs explicitly. The initial
+0.1.0 release defers this full performance campaign to 1.0; it makes no
+equivalent-work speedup or completed performance-validation claim.
 
 1. Run bounded unit tests with `../../scripts/with-rust cargo test --offline --lib --bins`.
 2. Build FLON with `../../scripts/with-rust cargo build --offline --release --bin flon`.
-   Build the companion generator with `../../scripts/with-rust cargo build --offline --release --manifest-path ../json-volcano/Cargo.toml --features cli`.
+   Install the published generator with `cargo install json-volcano --version 1.0.0 --locked --features cli`
+   in the developer environment (see [generator guide](json-generator.md) for a local-development alternative).
    Record the actual binary build revision, local modifications, compiler and
    flags, package version, and generator corpus version. A shell prompt's HEAD
    alone does not establish the executable's identity.
@@ -77,13 +80,13 @@ mkdir -p "$run_dir"
 
 # Repeat this group three times; all timing and generator stderr is preserved.
 { time (
-  ../json-volcano/target/release/json-volcano --bytes 100MiB --seed 42 --stats |
+  json-volcano --bytes 100MiB --seed 42 --stats |
     ./target/release/flon --no-summary > /dev/null
 ); } 2>> "$run_dir/rust-live-100mib.log"
 
 # Optional local Node comparison, using the same input and redirected defaults.
 { time (
-  ../json-volcano/target/release/json-volcano --bytes 100MiB --seed 42 --stats |
+  json-volcano --bytes 100MiB --seed 42 --stats |
     flon > /dev/null
 ); } 2>> "$run_dir/node-live-100mib.log"
 ```

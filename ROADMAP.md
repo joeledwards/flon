@@ -2,18 +2,18 @@
 
 ## Release sequence and scope
 
-Target coordinated **1.0.0 releases** with `json-skimmer`: finish both cores,
-publish `json-skimmer` 1.0.0 first, then publish FLON against that dependency.
-There are no calendar deadlines or required interim 0.x releases. Publishing,
-external checks, and integration/e2e execution remain developer-controlled.
+Publish initial **0.1.0 releases** to establish the crate names and make the
+implemented streaming core available. Publish json-skimmer first, then FLON
+against json-skimmer 0.1.0. json-volcano 1.0.0 is already published and is a
+registry development dependency in both consumers, with CLI features disabled.
+See [release instructions](docs/releasing.md) for checks, publication order and
+known pre-1.0 limitations. External checks and publication remain developer-run.
 
-FLON 1.0 provides the agreed Node-compatible core plus the implemented Rust
-streaming/recovery improvements. Parser decoding/path convenience adapters are
-not dependencies or release gates: FLON already consumes raw public events.
-See the [parser release roadmap](../json-skimmer/ROADMAP.md),
-[compatibility contract](docs/compatibility.md), and [coverage matrix](docs/test-coverage.md).
-Update checklists and coverage notes as work lands; checked items represent
-implemented/verified work.
+The 1.0 checklists below remain the stability target, rather than a claim that
+0.1 has passed every 1.0 acceptance gate. Parser decoding/path convenience
+adapters are later work, not prerequisites for either initial release. FLON
+already consumes only public raw parser events. Checked items represent
+implemented/verified work; pending tests and audits stay unchecked.
 
 ## 1.0.0 — formatter and compatibility
 
@@ -65,11 +65,11 @@ implemented/verified work.
       and documented number/escape differences)
 - [ ] Benchmark throughput and memory on deep, large-token, and long-lived input,
       including file-backed confirmed output
-- [ ] For every released version, complete the [performance checklist](docs/performance.md#per-version-checklist)
+- [ ] For 1.0 and subsequent released versions, complete the [performance checklist](docs/performance.md#per-version-checklist)
       and append version/build metadata, raw timing artifacts, repeated results,
       and missing-case reasons to the [results log](docs/performance-results.md)
-- [ ] Verify package-name availability on crates.io
-- [ ] Complete licensing files and package metadata
+- [x] Check registry index for an existing package (no `flon` entry at 0.1 preparation; publication confirms availability)
+- [x] Complete licensing files and package metadata
 - [ ] Establish and test a minimum supported Rust version
 - [ ] Review public formatter/configuration APIs and document stable defaults
 - [ ] Run final unit, documentation, formatting, lint, and authorized release checks
