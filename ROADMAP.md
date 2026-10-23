@@ -12,9 +12,9 @@
 - [x] Resolve automatic color against the output destination before formatting
       so stripped ANSI bytes do not inflate confirmed-buffer accounting. Add a
       regression test for redirected output with a candidate size limit.
-- [ ] Expand chunk-boundary and invalid-input tests, including UTF-8, nesting
+- [x] Expand chunk-boundary and invalid-input tests, including UTF-8, nesting
       limits, EOF recovery, and writer failures, before adding more CLI features.
-- [ ] Update the README's implementation status to reflect the existing CLI
+- [x] Update the README's implementation status to reflect the existing CLI
       and color support, and reconcile parser roadmap items with functionality
       already demonstrated by FLON.
 
@@ -31,8 +31,10 @@
 - [x] Add bounded or explicitly unlimited confirmed-output mode
 - [x] Report structured invalid-candidate recovery outcomes
 - [ ] Define a line-delimited JSON parser-event diagnostic format
-- [ ] Port the complete `node-flon` fixture set
-- [ ] Add recovery, Unicode, escaping, precision, and chunk-boundary fixtures
+- [x] Port all distinct active `node-flon` fixtures (duplicate assertions consolidated)
+- [ ] Review the disabled legacy junk fixture separately; its expected array
+      entries do not match its input
+- [x] Add recovery, Unicode, escaping, precision, and chunk-boundary fixtures
 
 ## Command-line application
 
@@ -63,9 +65,9 @@
 ## Release readiness
 
 - [ ] Verify whether the `flon` package name is available on crates.io
-- [ ] Add README examples for library use, stdin, files, profiles, recovery,
+- [x] Add README examples for library use, stdin, files, profiles, recovery,
       confirmed output, and color before publishing
-- [ ] Show representative JSON input and plain FLON output in the README
+- [x] Show representative JSON input and plain FLON output in the README
 - [ ] Add licensing and complete package metadata
 - [ ] Establish a minimum supported Rust version
 - [ ] Add integration tests for the compiled CLI

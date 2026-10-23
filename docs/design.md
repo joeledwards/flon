@@ -146,7 +146,7 @@ may render these outcomes to stderr according to its diagnostics settings.
 Recovery diagnostics remain separate from stdout unless an output annotation
 is explicitly requested.
 
-Planned CLI profiles expand into ordinary settings rather than adding library
+CLI profiles expand into ordinary settings rather than adding library
 behavior. `wraith` selects live output, silent invalid-candidate skipping, and
 quiet diagnostics. `infinite` selects confirmed output with a larger memory
 threshold, unlimited per-candidate spool storage, annotated skipping, and
@@ -159,7 +159,7 @@ line-delimited JSON. Records include the event type, absolute byte offset or
 span, container or string kind where applicable, safely encoded fragment
 bytes, structured parse errors, and candidate lifecycle events.
 
-The CLI provides two forms:
+The planned CLI forms are:
 
 - `--output=events` writes event records to stdout instead of FLON
   assignments; and

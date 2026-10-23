@@ -8,10 +8,10 @@ output for one top-level candidate, spilling to a private temporary file when
 needed, and releases it only after the candidate is valid.
 
 This Rust implementation is under development alongside `json-skimmer`. The
-initial implementation is a plain-text formatter library; CLI and terminal
-color support will follow after the streaming contract is stable.
+implementation includes a streaming formatter library, stdin/file CLI,
+recovery policies, bounded confirmed output, and terminal color support.
 
-The planned terminal implementation uses `anstyle` for semantic styles and
+The terminal implementation uses `anstyle` for semantic styles and
 `anstream` for destination-aware output. These are FLON concerns and do not
 become dependencies of `json-skimmer`.
 
@@ -26,6 +26,39 @@ become dependencies of `json-skimmer`.
 
 See the [roadmap](ROADMAP.md) for current implementation status and planned CLI
 work.
+
+## Example
+
+Input:
+
+```json
+{"name":"flon","items":[1,true]}
+```
+
+Plain output:
+
+```javascript
+json = {};
+json.name = "flon";
+json.items = [];
+json.items[0] = 1;
+json.items[1] = true;
+```
+
+## Library use
+
+```rust
+let output = flon::format(
+    br#"{"name":"flon"}"#.as_slice(),
+    Vec::new(),
+).expect("valid JSON and writable output");
+assert_eq!(output, b"json = {};\njson.name = \"flon\";\n");
+```
+
+Use `format_with_config` for key/depth limits, recovery policies, styling,
+and confirmed output. `Formatter` also accepts public `json-skimmer` events
+directly. Live recovery can leave partial assignments; confirmed mode discards
+invalid candidates before they become visible.
 
 ## Command-line use
 
@@ -81,3 +114,5 @@ and redirected files remain plain. Override it explicitly when needed:
 - [Compatibility](docs/compatibility.md) defines the relationship with
   `node-flon` and intentional behavior changes.
 - [Color](docs/color.md) records the terminal styling and configuration policy.
+
+- [Test coverage](docs/test-coverage.md) maps behavior to tests and remaining gaps.

@@ -57,6 +57,22 @@ allowing accidental unbounded allocation.
 The formatter depends only on public `json-skimmer` interfaces. It does not
 replace parser internals after an error.
 
+## Current fixture coverage
+
+`src/compatibility_tests.rs` ports all 20 distinct active input/output cases
+from `node-flon/test/unmarshal.js`; repeated assertions share one fixture. The
+Node suite was inspected read-only, not executed. Each Rust fixture checks the
+convenience API plus live and confirmed event rendering at every two-chunk
+split and in one-byte chunks. Eight additional fixtures cover empty containers,
+duplicate/escaped/Unicode keys, control escapes, exact numbers, adjacent mixed
+roots, and junk recovery. Other recovery and resource-limit cases live in the
+contract suite.
+
+The disabled Node junk fixture is not treated as an authoritative golden file:
+its input has three string array elements before an object, but its expected
+output places that object at index two. Rust has independent junk-recovery
+fixtures; resolving that legacy mismatch remains a separate task.
+
 ## Fixture matrix
 
 The compatibility suite must include:
@@ -88,7 +104,7 @@ URL input and disabling TLS certificate validation require a deliberate safety
 and dependency decision. If insecure TLS is retained, it must be explicit,
 local to the selected request, and accompanied by a visible warning.
 
-The Rust CLI additionally provides parser-event diagnostics for debugging
+The Rust CLI is planned to provide parser-event diagnostics for debugging
 malformed and recovered streams. This is an intentional extension rather than
 a `node-flon` compatibility requirement. Event-only output may use stdout;
 event tracing alongside FLON assignments uses stderr.

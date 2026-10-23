@@ -1229,6 +1229,9 @@ mod tests {
 mod contract_tests;
 
 #[cfg(test)]
+mod compatibility_tests;
+
+#[cfg(test)]
 extern crate self as flon;
 #[cfg(test)]
 mod stream_test_support;
